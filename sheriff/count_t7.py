@@ -1009,6 +1009,8 @@ def run_count_t7(bam_file,
     
     gtf["name"] = gene_names
 
+    id_to_gene = dict(zip(gtf["gene_id"], gtf["name"]))
+
     genes_bed = gtf[['seqname', 'start', 'end', 'name']]
     genes_bed.columns = ['Chromosome', 'Start', 'End', 'Name']
 
@@ -1139,7 +1141,7 @@ def run_count_t7(bam_file,
               file=sys.stdout, flush=True) if verbosity >= 1 else None
 
     # Run using prefiltered non-t7 bam
-    cell_by_gene_umi_counts = bam_count_gene_umis(filt_bam, cell_barcodes_dict, gene_names,
+    cell_by_gene_umi_counts = bam_count_gene_umis(filt_bam, cell_barcodes_dict, gene_names, id_to_gene,
                                                     n_cpus=n_cpus, verbose=(verbosity >= 1), chunk_size_mb=chunk_size_mb,
                                  )
 
@@ -1147,7 +1149,7 @@ def run_count_t7(bam_file,
         print("Performing mRNA counting, INCLUDING the confounding t7 roudns on user request "
               "(via 'uncorrect_gene_count' input).",
               file=sys.stdout, flush=True) if verbosity>= 1 else None
-        cell_by_gene_umi_counts_t7_confounded = bam_count_gene_umis(bam_file, cell_barcodes_dict, gene_names,
+        cell_by_gene_umi_counts_t7_confounded = bam_count_gene_umis(bam_file, cell_barcodes_dict, gene_names, id_to_gene,
                                                                     n_cpus=n_cpus, verbose=(verbosity >= 1),
                                                                     chunk_size_mb=chunk_size_mb
                                                                     )
@@ -1238,7 +1240,8 @@ def run_count_t7(bam_file,
     # gene counts (mRNA) counts
     cell_by_gene_umi_counts.to_parquet(out_path/'cell_gene_mrna_counts.parquet.gz', compression="gzip")
 
-    # gene counts (mRNA) counts
+    # count of reads that intersect the edit site counts, AFTER removing all of the potential T7 reads.
+    # Not really relevant for new version.
     after_t7_edits_umi_counts.to_parquet(out_path/'cell_canonical-edit-site_counts.t7-removed.parquet.gz',
                                          compression="gzip")
 
