@@ -192,9 +192,20 @@ Or in R:
 Citation
 --------
 
+Joint single-cell profiling of CRISPR-Cas9 edits and transcriptomes reveals widespread off-target events and their effects on gene expression
+Michael H. Lorenzini, Brad Balderson, Karthyayani Sajeev, Aaron J. Ho, Graham McVicker
+bioRxiv 2025.02.07.636966; doi: https://doi.org/10.1101/2025.02.07.636966
+
 Contact
 -------
 
 Authors: Brad Balderson, Mickey Lorenzini, Aaron Ho, Graham McVicker
 
 Contact:  bbalderson@salk.edu
+
+Change log
+-------
+
+    * v1.0.0 Initial version used for manuscript that was uploaded to bioarchive.
+    * v1.1.0 Run-speed optimized and parallelisation for gene counting.
+    * v1.1.1 Minor-change in the gene-counting logic, to account for different split-pipe version outputs.
