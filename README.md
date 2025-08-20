@@ -75,6 +75,8 @@ Usage
     │ --mrna_count_mode                                                                                  TEXT     Mode for quantifying gene expression,'all' is to count all reads associated with a gene, 'polyT' is to │
     │                                                                                                             only count polyT reads, indicating mature mRNA transcripts.                                            │
     │                                                                                                             [default: all]                                                                                         │
+    │ --uncorrected_count                                                  --no-uncorrected_count                 Whether to also output the gene counts WITHOUT removing reads around inferred edit sites.              │
+    │                                                                                                             [default: no-uncorrected_count]                                                                        │
     │ --out,--outdir,--out_dir                              -o                                           TEXT     Write output files to this location. Defaults to Current Working Directory [default: None]             │
     │ --v,--verbosity                                       -v,-verbosity                                INTEGER  Verbosity levels. 0 errors only, 1 prints processing progress, 2 prints debugging information.         │
     │                                                                                                             [default: 1]                                                                                           │
