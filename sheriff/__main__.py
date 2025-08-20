@@ -149,6 +149,15 @@ whitelist_file: Annotated[
                 )
             )
         ] = "all",
+    uncorrected_gene_count: Annotated[
+        Optional[bool],
+        typer.Option(
+            "--uncorrected_count/--no-uncorrected_count",
+            help=(
+                "Whether to also output the gene counts WITHOUT removing reads around inferred edit sites."
+                )
+            )
+        ] = False,
     outdir: Annotated[
         Optional[str],
         typer.Option(
@@ -217,7 +226,7 @@ chunk_size_mb: Annotated[
                  outdir=outdir,
                  edit_site_rev_comp_filt=edit_site_rev_comp_filt,
                  max_gene_count_reads=None,
-                 uncorrected_gene_count=False, # For testing
+                 uncorrected_gene_count=uncorrected_gene_count, # For testing
                  constrain_allele_calls=False,
                  verbosity=verbosity,
                  n_cpus=n_cpus,
