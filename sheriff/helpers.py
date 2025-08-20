@@ -261,14 +261,14 @@ def within_single_mismatch(seq1, seq2):
             diff_score+=1
     return True
 
-def bam_count_gene_umis(bam_file, cell_barcodes_dict, gene_names, n_cpus=1, verbose=True,
+def bam_count_gene_umis(bam_file, cell_barcodes_dict, gene_names, id_to_genes, n_cpus=1, verbose=True,
                         chunk_size_mb=15, # Measured in mb
                         ):
     """ Count all the gene UMIs across the bam file!
     """
     if n_cpus == 1:
-        cell_by_gene_umi_counts_SPARSE = bam_count_gene_umis_contig(bam_file, cell_barcodes_dict, gene_names, verbose,
-                                                                    None)
+        cell_by_gene_umi_counts_SPARSE = bam_count_gene_umis_contig(bam_file, cell_barcodes_dict,
+                                                                    gene_names, id_to_genes, verbose,None)
         # Convert from sparse format to dense for output.
         cell_by_gene_umi_counts = pd.DataFrame(cell_by_gene_umi_counts_SPARSE.toarray(),
                                                index=list(cell_barcodes_dict.keys()),
@@ -304,7 +304,8 @@ def bam_count_gene_umis(bam_file, cell_barcodes_dict, gene_names, n_cpus=1, verb
         from concurrent.futures import ProcessPoolExecutor
 
         from functools import partial
-        partial_func = partial(bam_count_gene_umis_contig, bam_file, cell_barcodes_dict, gene_names, verbose)
+        partial_func = partial(bam_count_gene_umis_contig, bam_file, cell_barcodes_dict,
+                               gene_names, id_to_genes, verbose)
 
         with ProcessPoolExecutor(max_workers=n_cpus) as executor:
             contig_counts = list(executor.map(partial_func, genome_chunks))
@@ -326,7 +327,7 @@ def bam_count_gene_umis(bam_file, cell_barcodes_dict, gene_names, n_cpus=1, verb
 
         return cell_by_gene_umi_counts
 
-def bam_count_gene_umis_contig(bam_file, cell_barcodes_dict, gene_names, verbose, contig,
+def bam_count_gene_umis_contig(bam_file, cell_barcodes_dict, gene_names, id_to_genes, verbose, contig,
                         ):
     """Get's gene UMI counts per cell, returning as sparse array of counts! Sparse is important to prevent memory issues
     from returning a ton of cells X genes sized arrays from each thread.
@@ -357,15 +358,29 @@ def bam_count_gene_umis_contig(bam_file, cell_barcodes_dict, gene_names, verbose
             if (cell_barcode not in cell_barcodes_dict):
                 continue
 
-            gene_name_tag = read.get_tag('GN')
+            # NEW logic, more robust to how the reads are tagged.
             gene_id_tag = read.get_tag('GX')
 
-            if (gene_name_tag != '') and (gene_name_tag in gene_set):
-                gene_or_id = gene_name_tag
-            elif (gene_id_tag != '') and (gene_id_tag in gene_set):
-                gene_or_id = gene_id_tag
+            if (gene_id_tag != '') and (gene_id_tag in id_to_genes):
+                gene_or_id = id_to_genes[ gene_id_tag ]
+            elif gene_id_tag != '': # Is tagged with something unexpected here....
+                for file_ in [sys.stdout, sys.stderr]:
+                    print(f"WARNING: found read with unexpected GX tag given INPUT GTF file: {gene_id_tag}",
+                                                                                                 file=file_, flush=True)
+                    print(f"\tCHECK used the same GTF file as the split-pipe processing", file=file_, flush=True)
             else:
                 continue
+
+            # OLD logic, this was sensitive to different versions of split-pipe.
+            # gene_name_tag = read.get_tag('GN')
+            # gene_id_tag = read.get_tag('GX')
+            #
+            # if (gene_name_tag != '') and (gene_name_tag in gene_set):
+            #     gene_or_id = gene_name_tag
+            # elif (gene_id_tag != '') and (gene_id_tag in gene_set):
+            #     gene_or_id = gene_id_tag
+            # else:
+            #     continue
 
             # Should be cleaner and faster
             genes_to_bcs_to_umis[gene_or_id][cell_barcode].add( read.get_tag('pN') )
