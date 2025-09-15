@@ -301,14 +301,26 @@ def bam_count_gene_umis(bam_file, cell_barcodes_dict, gene_names, id_to_genes, n
                     genome_chunks.append((chr_, end_, size_))
 
         #### Processing in parallel
-        from concurrent.futures import ProcessPoolExecutor
+        from concurrent.futures import ProcessPoolExecutor, as_completed
 
         from functools import partial
         partial_func = partial(bam_count_gene_umis_contig, bam_file, cell_barcodes_dict,
                                gene_names, id_to_genes, verbose)
 
         with ProcessPoolExecutor(max_workers=n_cpus) as executor:
-            contig_counts = list(executor.map(partial_func, genome_chunks))
+            futures = {executor.submit(partial_func, chunk): chunk for chunk in genome_chunks}
+            contig_counts = []
+            for future in as_completed(futures):
+                try:
+                    result = future.result()  # will re-raise exceptions from worker
+                    contig_counts.append( result )
+                except Exception as e:
+                    chunk = futures[future]
+                    raise Exception(f"Error in genome chunk {chunk}: {e}")
+
+        # OLD version, had problem of SILENTLY erroring out, leaving certain chromosomes without counts!
+        # with ProcessPoolExecutor(max_workers=n_cpus) as executor:
+        #     contig_counts = list(executor.map(partial_func, genome_chunks))
 
         # DENSE version
         # cell_by_gene_umi_counts = contig_counts[0].values
@@ -332,6 +344,10 @@ def bam_count_gene_umis_contig(bam_file, cell_barcodes_dict, gene_names, id_to_g
     """Get's gene UMI counts per cell, returning as sparse array of counts! Sparse is important to prevent memory issues
     from returning a ton of cells X genes sized arrays from each thread.
     """
+
+    #### Testing raise error!!! Before it would silently error.
+    # if 'hg38_1' in contig:
+    #     raise Exception("Successfully raise exeption from a thread!!")
 
     gene_set = set(gene_names)
 
