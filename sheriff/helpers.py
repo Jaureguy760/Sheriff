@@ -416,11 +416,13 @@ def bam_count_gene_umis_contig(bam_file, cell_barcodes_dict, gene_names, id_to_g
     gene_indices = []
     gene_cell_indices = []
     gene_cell_umis = []
+    gene_names_extracted = []
     for genei in range(len(gene_names)):
 
         gene_name = gene_names_list[genei]
 
         if gene_name in genes_to_bcs_to_umis:
+            gene_names_extracted.append( gene_name )
             gene_indices.append(genei)
 
             cell_barcodes = list( genes_to_bcs_to_umis[gene_name].keys() )
@@ -447,7 +449,7 @@ def bam_count_gene_umis_contig(bam_file, cell_barcodes_dict, gene_names, id_to_g
                                                       cell_by_gene_umi_counts_SPARSE_indices[:, 2])), # row, col indices
                                                     shape=(len(cell_barcodes_dict),
                                                            len(gene_names)), # Total shape of sparse array.
-                                                    dtype = np.uint16
+                                                    dtype = np.int64
                                                 )
 
     # cell_by_gene_umi_counts = pd.DataFrame(cell_by_gene_umi_counts,
@@ -467,7 +469,7 @@ def get_cell_by_gene_umi_counts(total_cells,
     row_cell_indices = []
     col_gene_indices = []
     counts = []
-    for genei in prange(len(gene_indices)):
+    for genei in range(len(gene_indices)): # SHOULD NOT BE DONE IN PARALLEL COULD CREATE RACE CONDITION...
 
         gene_index = gene_indices[ genei ]
 
@@ -485,10 +487,10 @@ def get_cell_by_gene_umi_counts(total_cells,
         counts.extend( list(cell_counts) )
 
     # Outputting as a single array
-    cell_by_gene_umi_SPARSE_indices = np.zeros((len(counts), 3), dtype=np.uint16)
-    cell_by_gene_umi_SPARSE_indices[:, 0] = np.array(counts, dtype=np.uint16)
-    cell_by_gene_umi_SPARSE_indices[:, 1] = np.array(row_cell_indices, dtype=np.uint16)
-    cell_by_gene_umi_SPARSE_indices[:, 2] = np.array(col_gene_indices, dtype=np.uint16)
+    cell_by_gene_umi_SPARSE_indices = np.zeros((len(counts), 3), dtype=np.int64)
+    cell_by_gene_umi_SPARSE_indices[:, 0] = np.array(counts, dtype=np.int64)
+    cell_by_gene_umi_SPARSE_indices[:, 1] = np.array(row_cell_indices, dtype=np.int64)
+    cell_by_gene_umi_SPARSE_indices[:, 2] = np.array(col_gene_indices, dtype=np.int64)
 
     return cell_by_gene_umi_SPARSE_indices
 
