@@ -1,3 +1,13 @@
+example_data/Homo_sapiens.GRCh38.110.renamed.gtf
+example_data/Homo_sapiens.GRCh38.110.renamed.sorted.gtf.gz
+example_data/Homo_sapiens.GRCh38.110.renamed.sorted.gtf.gz.tbi
+example_data/Homo_sapiens.GRCh38.110.sorted.gtf
+example_data/hg38.fa
+example_data/hg38.fa.fai
+example_data/hg38_renamed.fa
+example_data/hg38_renamed.fa.fai
+example_data/hg38_renamed.fa.order
+example_data/hg38_renamed.order
 example_data/Homo_sapiens.GRCh38.114.gtf
 sheriff/__pycache__/
 subset_500_cell_sheriff_output2/
