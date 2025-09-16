@@ -34,7 +34,7 @@ def get_t7_count_matrix(cell_barcodes_dict, canonical_to_edits, canonical_edit_b
     """
 
     t7_barcoded_counts = np.zeros((len(cell_barcodes_dict), len(canonical_to_edits)),
-                                  dtype=np.uint16)
+                                  dtype=np.uint32)
 
     #edit_bc_cell_umis_filtered # edit to cell barcodes to umis
     #canonical_to_edits # canonical-edits to edits
@@ -70,12 +70,12 @@ def get_cell_counts_from_umi_dict(cell_bc_to_umis, cell_barcodes_dict):
         cell_bc_to_umis = {cell_bc: umis for cell_bc, umis in cell_bc_to_umis.items() if cell_bc in cell_barcodes_dict}
 
         if len(cell_bc_to_umis) == 0:
-            return np.zeros(( len(cell_barcodes_dict) ), dtype=np.uint16)
+            return np.zeros(( len(cell_barcodes_dict) ), dtype=np.uint32)
 
         # Now making more Numba friendly data structures.
         # Re-processing these to make it simpler and also compilable with numba - namely will represent the UMI data as
         # 2 numpy arrays and one list:
-        cell_bc_indexes = np.array([cell_barcodes_dict[cell_barcode] for cell_barcode in cell_bc_to_umis], dtype=np.int64)
+        cell_bc_indexes = np.array([cell_barcodes_dict[cell_barcode] for cell_barcode in cell_bc_to_umis], dtype=np.uint32)
         umi_len = len( list( list(cell_bc_to_umis.values())[0] )[0] )
         cell_umis = [np.array(list(umis), dtype=f'<U{umi_len}') for umis in cell_bc_to_umis.values()]
 
@@ -86,7 +86,7 @@ def cell_umi_counts_FAST(total_cells, cell_bc_indexes, cell_umis):
     """ Counts the cell UMIs FAST
     """
 
-    cell_umi_counts = np.zeros((total_cells), dtype=np.uint16)
+    cell_umi_counts = np.zeros((total_cells), dtype=np.uint32)
 
     for i in range(len(cell_bc_indexes)):
 
@@ -195,7 +195,7 @@ def depth_first_search(current_index, current_connected_indices, adjacency_matri
 
 def cell_umi_counts_original(cell_bc_to_umis, cell_barcodes_dict):
     """Counts the cell UMIs using the original and SLOW method"""
-    cell_umi_counts = np.zeros((len(cell_barcodes_dict)), dtype=np.uint16)
+    cell_umi_counts = np.zeros((len(cell_barcodes_dict)), dtype=np.uint32)
     for cell_barcode in cell_bc_to_umis:
 
         cell_index = cell_barcodes_dict[cell_barcode]
@@ -404,7 +404,7 @@ def bam_count_gene_umis_contig(bam_file, cell_barcodes_dict, gene_names, id_to_g
     if len(genes_to_bcs_to_umis) == 0: # No genic reads found on this contig, so just return an empty count matrix.
 
         # Sparse version
-        return csr_array((len(cell_barcodes_dict), len(gene_names)), dtype=np.uint16)
+        return csr_array((len(cell_barcodes_dict), len(gene_names)), dtype=np.uint32)
 
         # OLD version
         # return pd.DataFrame(np.zeros((len(cell_barcodes_dict), len(gene_names)), dtype=np.uint16),
@@ -449,7 +449,7 @@ def bam_count_gene_umis_contig(bam_file, cell_barcodes_dict, gene_names, id_to_g
                                                       cell_by_gene_umi_counts_SPARSE_indices[:, 2])), # row, col indices
                                                     shape=(len(cell_barcodes_dict),
                                                            len(gene_names)), # Total shape of sparse array.
-                                                    dtype = np.int64
+                                                    dtype = np.uint32
                                                 )
 
     # cell_by_gene_umi_counts = pd.DataFrame(cell_by_gene_umi_counts,
@@ -487,10 +487,10 @@ def get_cell_by_gene_umi_counts(total_cells,
         counts.extend( list(cell_counts) )
 
     # Outputting as a single array
-    cell_by_gene_umi_SPARSE_indices = np.zeros((len(counts), 3), dtype=np.int64)
-    cell_by_gene_umi_SPARSE_indices[:, 0] = np.array(counts, dtype=np.int64)
-    cell_by_gene_umi_SPARSE_indices[:, 1] = np.array(row_cell_indices, dtype=np.int64)
-    cell_by_gene_umi_SPARSE_indices[:, 2] = np.array(col_gene_indices, dtype=np.int64)
+    cell_by_gene_umi_SPARSE_indices = np.zeros((len(counts), 3), dtype=np.uint32)
+    cell_by_gene_umi_SPARSE_indices[:, 0] = np.array(counts, dtype=np.uint32)
+    cell_by_gene_umi_SPARSE_indices[:, 1] = np.array(row_cell_indices, dtype=np.uint32)
+    cell_by_gene_umi_SPARSE_indices[:, 2] = np.array(col_gene_indices, dtype=np.uint32)
 
     return cell_by_gene_umi_SPARSE_indices
 
