@@ -7,11 +7,11 @@ Sheriff
 
 The inputted bam must be the annotated bam file outputted from split-pipe, which is available after creating an account at [Parse Biosciences](https://support.parsebiosciences.com/hc/en-us/articles/17200056667924-Pipeline-Download-Current-Version).
 
-For split-pipe version and commands used to process the fastq files to the annotated bam file, please see the [super_analysis repository](https://github.com/BradBalderson/superb_analysis/tree/main).
+For split-pipe version and commands used to process the fastq files to the annotated bam file, please see the [superb_analysis repository](https://github.com/BradBalderson/superb_analysis/tree/main).
 
 Install
 -------
-Please replace 'mamba' with 'conda' if not installed, mamba much faster however (recommend installing mamba!).
+Please replace 'mamba' with 'conda' if not installed, mamba is much faster however (we recommend installing mamba).
 
 Expected install time is approximately 1-minute. 
 
@@ -113,12 +113,14 @@ Assumes are in the Sheriff directory.
 ***NOTE*** The bam file used here is for the more deeply sequenced 500 cell library, with reads subsetted to those occuring
 with 200kb of a true called canonical edit site in a larger 10k cell library. Therefore the edit site calling will be 
 accurate (though will be missing some edit sites compared with the 10k library), ***BUT*** the gene counts will be NOT
-accurate because most reads have been filtered from the bam so can easily make it available via github.
+accurate because most reads have been filtered from the bam. This filtering was performed so the smaller bam could be 
+easily made available via github.
 
 #### Setting parameters
 ***NOTE*** 
-For minimum cells to call canonical edit site, used 3 for 10k library, recommend increasing for larger cell libraries to reduce false positive calls.
-CNV file only necessary if have copy number variants in the genome, can exclude and will assume 2 copies throughout. See 'ploidy' parameter.
+For minimum cells to call canonical edit site, a minimum of 3 cells was used for the 10k library.
+The CNV file only necessary if have copy number variants in the genome, can exclude and will assume 2 copies throughout. See the 'ploidy' parameter.
+If pooling multiple cell lines with different copy number variation, will need to account for this in down-stream analysis. 
 
 Expected run time for this demo is <30 seconds.
 
@@ -211,3 +213,4 @@ Change log
     * v1.0.0 Initial version used for manuscript that was uploaded to bioarchive.
     * v1.1.0 Run-speed optimized and parallelisation for gene counting.
     * v1.1.1 Minor-change in the gene-counting logic, to account for different split-pipe version outputs.
+    * v1.1.3 Fixed UMI counting bugs, that were introduced during the run-speed optimization of v1.1.0.
