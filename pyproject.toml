@@ -12,7 +12,7 @@ authors = [
     {name = "Aaron Ho"},
 ]
 readme = "README.md"
-license = {text = "BSD"}
+license = {text = "BSD-3-Clause"}
 requires-python = ">=3.10"
 keywords = ["Sheriff", "sheriff", "Superb-seq", "superb-seq", "CRISPR", "single-cell", "bioinformatics"]
 classifiers = [
@@ -23,7 +23,6 @@ classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
-    "License :: OSI Approved :: BSD License",
 ]
 
 dependencies = [
