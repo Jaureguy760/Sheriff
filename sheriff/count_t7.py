@@ -569,8 +569,43 @@ def run_count_t7(bam_file,
                                             # 'polyT' is to only count polyT reads, indicating mature mRNA transcripts.
                  outdir=None, verbosity=1, n_cpus=1,
                  chunk_size_mb=15, #Mb to process at a time, in parallel.
+                 # Priority 3: Optional instrumentation (all default=None for backward compatibility)
+                 progress_tracker=None,  # PipelineProgress instance for real-time progress bars
+                 checkpoint_manager=None,  # CheckpointManager instance for resume capability
+                 results_collector=None,  # PipelineResults instance for metrics collection
+                 enable_instrumentation=True,  # Master switch to disable all Priority 3 features
                  ):
-    
+
+    # === Priority 3: Initialize Instrumentation ===
+    # Boolean flags for feature detection (zero overhead when disabled)
+    _has_progress = progress_tracker is not None and enable_instrumentation
+    _has_checkpoint = checkpoint_manager is not None and enable_instrumentation
+    _has_results = results_collector is not None and enable_instrumentation
+
+    # Helper functions for safe updates (only call if feature enabled)
+    def _update_progress(task, advance=1, **kwargs):
+        """Update progress bar if enabled."""
+        if _has_progress:
+            progress_tracker.update(task, advance=advance, **kwargs)
+
+    def _save_checkpoint(step_name, outputs=None, metrics=None):
+        """Save checkpoint if enabled."""
+        if _has_checkpoint:
+            if outputs:
+                checkpoint_manager.update_outputs(**outputs)
+            if metrics:
+                checkpoint_manager.update_metrics(**metrics)
+            checkpoint_manager.save()
+
+    def _record_metric(key, value):
+        """Record metric if enabled."""
+        if _has_results:
+            results_collector.set_metric(key, value)
+
+    # Start timing
+    import time
+    _pipeline_start = time.time()
+
     # Process output data stuff
     if outdir is None:
         outdir = Path.cwd()
@@ -584,10 +619,14 @@ def run_count_t7(bam_file,
         cell_barcodes_dict = {key: value for value, key in enumerate(cell_barcodes_list)}
         cell_barcodes = set(cell_barcodes_list)
     
-    
+
     # Step 1: Get barcoded t7 edits
     print_freq = 1000000 # for testing
-    
+
+    # === Priority 3: Step 1 Instrumentation ===
+    if _has_progress:
+        progress_tracker.add_task("step1_barcoded", "Step 1: Barcoded Edit Detection", total=None)
+
     start_bc = timeit.default_timer()
     print("Counting barcoded edits...", file=sys.stdout, flush=True) if verbosity >= 1 else None
 
@@ -601,14 +640,30 @@ def run_count_t7(bam_file,
         blacklist_seqs=blacklist_seqs,
         print_freq=print_freq, verbosity=verbosity,
         )
-    
-    print(f"Processed barcoded edits in {(timeit.default_timer()-start_bc)/60:.3f} minutes\n",
+
+    step1_duration = timeit.default_timer() - start_bc
+    print(f"Processed barcoded edits in {step1_duration/60:.3f} minutes\n",
           file=sys.stdout, flush=True) if verbosity>= 1 else None
+
+    # === Priority 3: Step 1 Completion ===
+    if _has_progress:
+        progress_tracker.complete_task("step1_barcoded")
+    _record_metric("barcoded_edits_found", len(edit_counts))
+    _record_metric("step1_duration_seconds", step1_duration)
+    _save_checkpoint("bam_filtering",
+                     outputs={"edit_counts": len(edit_counts)},
+                     metrics={"barcoded_edits": len(edit_counts), "step1_time": step1_duration})
 
     ####################################################################################################################
     # Step 2: Adding canonical 'edit site' labels to each of the identified edits, so can easily define a window around
     #       which to do additional secondary filtering for non-barcoded reads below!
     ####################################################################################################################
+
+    # === Priority 3: Step 2 Instrumentation ===
+    if _has_progress:
+        progress_tracker.add_task("step2_clustering", "Step 2: Edit Site Clustering", total=None)
+    step2_start = timeit.default_timer()
+
     edit_datas = list(edit_counts.keys()) # This defines the order of the edit_datas...
     edit_count_values = np.array(list(edit_counts.values()))
 
@@ -803,10 +858,26 @@ def run_count_t7(bam_file,
             f"{edit_site.chrom}\t{edit_site.ref_pos - edit_dist}\t{edit_site.ref_pos + edit_dist}\t{edit_site.chrom}:{edit_site.ref_pos}\n")
     edit_sites_bed_file.close()
 
+    # === Priority 3: Step 2 Completion ===
+    step2_duration = timeit.default_timer() - step2_start
+    if _has_progress:
+        progress_tracker.complete_task("step2_clustering")
+    _record_metric("canonical_edit_sites", len(called_edit_sites))
+    _record_metric("step2_duration_seconds", step2_duration)
+    _save_checkpoint("edit_calling",
+                     outputs={"edit_sites_bed": str(out_path/"edit_sites.bed")},
+                     metrics={"canonical_sites": len(called_edit_sites), "step2_time": step2_duration})
+
     ####################################################################################################################
     # Step 3: Get NON-Barcoded t7 edits;
     #   3.1: IF cell has known edit, mop up non-BC reads as those within X bp that are in-line with edit.
     ####################################################################################################################
+
+    # === Priority 3: Step 3 Instrumentation ===
+    if _has_progress:
+        progress_tracker.add_task("step3_nonbarcoded", "Step 3: Non-Barcoded Edits", total=None)
+    step3_start = timeit.default_timer()
+
     print("Counting Non-barcoded edits...", file=sys.stdout, flush=True) if verbosity >= 1 else None
 
     # Let's construct this so we put the specific edits at a particular site as a group!
@@ -909,12 +980,27 @@ def run_count_t7(bam_file,
     pysam.view("-N", str(t7_barcoded_read_file), "-o", str(t7_barcode_bam), "-U", str(t7_non_barcode_bam), str(t7_bam), catch_stdout=False)
     pysam.index(str(t7_barcode_bam), catch_stdout=False)
     pysam.index(str(t7_non_barcode_bam), catch_stdout=False)
-    
+
+    # === Priority 3: Step 3 Completion ===
+    step3_duration = timeit.default_timer() - step3_start
+    if _has_progress:
+        progress_tracker.complete_task("step3_nonbarcoded")
+    _record_metric("step3_duration_seconds", step3_duration)
+    _save_checkpoint("kmer_matching",
+                     outputs={"t7_bam": str(t7_bam), "t7_barcode_bam": str(t7_barcode_bam)},
+                     metrics={"step3_time": step3_duration})
+
     # TODO should also write-out the state of the input arguments, just for record-keeping purposes (i.e. log inputs that generated the runs outputs)
 
     ####################################################################################################################
     # Step 4: T7 (barcode and/or non-barcoded) UMI counting per canonical edit-site
     ####################################################################################################################
+
+    # === Priority 3: Step 4 Instrumentation ===
+    if _has_progress:
+        progress_tracker.add_task("step4_umi", "Step 4: UMI Counting", total=None)
+    step4_start = timeit.default_timer()
+
     #### t7 barcoded umi counting
     # Need to collapse the particular-edit UMIs to the canonical-edit.
     canonical_edit_bc_cell_umis_filtered = defaultdict(lambda: defaultdict(set))
@@ -1266,9 +1352,25 @@ def run_count_t7(bam_file,
 
     print("Finished all UMI counting.", file=sys.stdout, flush=True) if verbosity >= 1 else None
 
+    # === Priority 3: Step 4 Completion ===
+    step4_duration = timeit.default_timer() - step4_start
+    if _has_progress:
+        progress_tracker.complete_task("step4_umi")
+    _record_metric("genes_quantified", len(called_edit_site_names))
+    _record_metric("step4_duration_seconds", step4_duration)
+    _save_checkpoint("umi_counting",
+                     outputs={"umi_counts_complete": True},
+                     metrics={"genes_quantified": len(called_edit_site_names), "step4_time": step4_duration})
+
     ####################################################################################################################
     # Step 8: Writing outputs.
     ####################################################################################################################
+
+    # === Priority 3: Step 5 Instrumentation ===
+    if _has_progress:
+        progress_tracker.add_task("step5_output", "Step 5: Writing Outputs", total=None)
+    step5_start = timeit.default_timer()
+
     print(f"Final step of writing all outputs to {outdir}.", file=sys.stdout, flush=True) if verbosity >= 1 else None
     # Going to Write out two main outputs! T7 Edit Info and Filtered Bams
     # out_path.mkdir(parents=True, exist_ok=True)
@@ -1371,3 +1473,30 @@ def run_count_t7(bam_file,
 
     print(f"Wrote T7 Edit data and filtered alignments to {outdir}!", file=sys.stdout,
                                                                                  flush=True) if verbosity >= 1 else None
+
+    # === Priority 3: Step 5 Completion & Final Summary ===
+    step5_duration = timeit.default_timer() - step5_start
+    if _has_progress:
+        progress_tracker.complete_task("step5_output")
+
+    _record_metric("step5_duration_seconds", step5_duration)
+
+    # Record total pipeline duration
+    total_duration = timeit.default_timer() - _pipeline_start
+    _record_metric("total_duration_seconds", total_duration)
+
+    # Record output files
+    if _has_results:
+        results_collector.set_output("Edit Sites (BED)", str(out_path/"edit_sites.bed"))
+        results_collector.set_output("Edit Site Info", str(out_path/"edit_site_info.txt"))
+        results_collector.set_output("T7 Edits (TSV)", str(out_path/"t7_barcode_edits.tsv"))
+        results_collector.set_output("Cell Allelic Dosage", str(out_path/"cell_allelic_dosage.canonical-edit-sites.parquet.gz"))
+
+    # Save final checkpoint
+    _save_checkpoint("output_generation",
+                     outputs={"pipeline_complete": True},
+                     metrics={"total_time": total_duration, "step5_time": step5_duration})
+
+    # Display results summary if enabled
+    if _has_results:
+        results_collector.display_summary()

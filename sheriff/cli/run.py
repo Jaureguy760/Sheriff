@@ -268,6 +268,12 @@ def run(
     results = PipelineResults()
     results.start_time = time.time()
 
+    # Initialize progress tracker
+    progress_tracker = None
+    if verbosity >= 1:
+        from ..progress import PipelineProgress
+        progress_tracker = PipelineProgress(verbosity=verbosity)
+
     # Run the pipeline
     try:
         run_count_t7(
@@ -295,30 +301,15 @@ def run(
             verbosity=verbosity,
             n_cpus=n_cpus,
             chunk_size_mb=chunk_size_mb,
+            # === Priority 3: Pass instrumentation components ===
+            progress_tracker=progress_tracker,
+            checkpoint_manager=checkpoint_manager,
+            results_collector=results,
+            enable_instrumentation=True,
         )
 
-        # Record end time
+        # Record end time (results already displayed by run_count_t7)
         results.end_time = time.time()
-
-        # Collect pipeline metrics (mock data for now - would be populated by instrumented pipeline)
-        # In production, count_t7.py would pass metrics back or we'd parse output files
-        if outdir:
-            import glob
-
-            # Try to infer results from output files
-            edit_sites_file = os.path.join(outdir, "edit_site_info.txt")
-            if os.path.exists(edit_sites_file):
-                results.set_output("Edit Sites", edit_sites_file)
-
-            umi_file = os.path.join(outdir, "*umi*.mtx")
-            umi_files = glob.glob(umi_file)
-            if umi_files:
-                results.set_output("UMI Counts", umi_files[0])
-
-            gene_file = os.path.join(outdir, "*gene*.mtx")
-            gene_files = glob.glob(gene_file)
-            if gene_files:
-                results.set_output("Gene Counts", gene_files[0])
 
         logger.info("Pipeline completed successfully")
 
@@ -327,17 +318,36 @@ def run(
             checkpoint_manager.mark_completed(success=True)
             logger.info("Checkpoint marked as completed")
 
-        # Display results summary
+        # Success message (results summary already shown by pipeline)
         if verbosity >= 1:
             console.print("\n[green bold]✓ Pipeline completed successfully![/green bold]")
-            results.display_summary(show_performance=False, show_outputs=True)
         else:
             console.print("\n[green bold]✓ Pipeline completed successfully![/green bold]")
+
+    except KeyboardInterrupt:
+        # Handle user interrupt - save checkpoint if enabled
+        logger.warning("Pipeline interrupted by user (Ctrl+C)")
+        console.print("\n[yellow bold]⚠ Pipeline interrupted by user[/yellow bold]")
+
+        if checkpoint_manager:
+            try:
+                checkpoint_manager.save()
+                console.print(f"[green]✓ Checkpoint saved - resume with:[/green] sheriff run --resume")
+                logger.info("Checkpoint saved after interruption")
+            except Exception as save_err:
+                logger.error(f"Failed to save checkpoint: {save_err}")
+                console.print(f"[red]✗ Failed to save checkpoint:[/red] {save_err}")
+
+        raise typer.Exit(code=130)  # Standard exit code for SIGINT
 
     except Exception as e:
         # Record failure
         if checkpoint_manager:
-            checkpoint_manager.mark_completed(success=False, error=str(e))
+            try:
+                checkpoint_manager.mark_completed(success=False, error=str(e))
+                logger.info("Checkpoint marked as failed")
+            except Exception as ckpt_err:
+                logger.error(f"Failed to mark checkpoint as failed: {ckpt_err}")
 
         logger.error(f"Pipeline failed: {e}", exc_info=True)
         console.print(f"\n[red bold]✗ Pipeline failed:[/red bold] {e}")
