@@ -1,33 +1,66 @@
-example_data/Homo_sapiens.GRCh38.110.renamed.gtf
-example_data/Homo_sapiens.GRCh38.110.renamed.sorted.gtf.gz
-example_data/Homo_sapiens.GRCh38.110.renamed.sorted.gtf.gz.tbi
-example_data/Homo_sapiens.GRCh38.110.sorted.gtf
-example_data/hg38.fa
-example_data/hg38.fa.fai
-example_data/hg38_renamed.fa
-example_data/hg38_renamed.fa.fai
-example_data/hg38_renamed.fa.order
-example_data/hg38_renamed.order
-example_data/Homo_sapiens.GRCh38.114.gtf
-sheriff/__pycache__/
-subset_500_cell_sheriff_output2/
-subset_500_cell_sheriff_output3/
-subset_500_cell_sheriff_output3/
-subset_500_cell_sheriff_output2/
-sheriff/__pycache__/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
 .idea/
-dependency_notes.txt
+.vscode/
+*.swp
+*.swo
+*~
 .DS_Store
-example_data/Homo_sapiens.GRCh38.110.gtf
-example_data/Homo_sapiens.GRCh38.dna.primary_assembly.fa
-example_data/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Output directories
+subset_*_sheriff_output/
+*_sheriff_output/
+
+# Large reference files (except whitelisted test data)
+example_data/*.fa
+example_data/*.fa.fai
+example_data/*.gtf
+example_data/*.gtf.gz
+example_data/*.gtf.gz.tbi
+example_data/*.order
+
+# Whitelist specific test files
 !example_data/barcode_headAligned_anno.sorted.edit_regions_200kb.bam
 !example_data/barcode_headAligned_anno.sorted.edit_regions_200kb.bam.bai
 !example_data/barcode_whitelist.500-cell.txt
 !example_data/K562_CNV_hg19.tsv
 !example_data/black_100x_peaks_by_qval.simple_repeats_50N.EXTRA.bed
-!example_dadta/blacklist_seqs.txt
-subset_500_cell_sheriff_output/
-build/
-dist/
-Sheriff.egg-info/
+!example_data/blacklist_seqs.txt
+
+# Temporary files
+*.tmp
+*.log
+dependency_notes.txt

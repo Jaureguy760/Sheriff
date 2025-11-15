@@ -1,0 +1,118 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "Sheriff"
+version = "1.1.3"
+description = "Sheriff calls CRISPR/cas9 edit sites, and quantifies the number of edited alleles at each site along with gene expression in single cells using Superb-seq data."
+authors = [
+    {name = "Brad Balderson", email = "bbalderson@salk.edu"},
+    {name = "Michael Lorenzini"},
+    {name = "Aaron Ho"},
+]
+readme = "README.md"
+license = {text = "BSD"}
+requires-python = ">=3.10"
+keywords = ["Sheriff", "sheriff", "Superb-seq", "superb-seq", "CRISPR", "single-cell", "bioinformatics"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "License :: OSI Approved :: BSD License",
+]
+
+dependencies = [
+    "pysam>=0.19.0",
+    "gtfparse==2.5.0",
+    "pyranges>=0.0.111",
+    "biopython==1.81",
+    "numpy==1.26.4",
+    "pandas>=1.5.0",
+    "polars>=0.18.0",
+    "scipy>=1.10.0",
+    "numba>=0.56.0",
+    "faiss-cpu==1.10.0",
+    "typer>=0.9.0",
+    "typing_extensions>=4.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/BradBalderson/Sheriff"
+Repository = "https://github.com/BradBalderson/Sheriff"
+"Bug Tracker" = "https://github.com/BradBalderson/Sheriff/issues"
+
+[project.scripts]
+sheriff = "sheriff.__main__:main"
+Sheriff = "sheriff.__main__:main"
+
+[tool.black]
+line-length = 120
+target-version = ['py310']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers"
+testpaths = [
+    "tests",
+]
+pythonpath = [
+    "."
+]

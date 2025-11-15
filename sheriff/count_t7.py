@@ -180,7 +180,7 @@ def match_barcode_forward(read, fasta, bc_kmer_matcher, output_kmer_hash=False):
 
     try:
         ref_seq = fasta.fetch(chr_name, ref_pos, ref_pos+1)#ref_pos+3)
-    except:
+    except (KeyError, IndexError, ValueError) as e:
         print(f"Warning could not load from reference sequence to construct REF: {chr_name}: {ref_pos}-{ref_pos+1}",
               file=sys.stdout, flush=True)
         return None
@@ -217,7 +217,7 @@ def match_barcode_reverse(read, fasta, bc_kmer_matcher, output_kmer_hash=False):
     # Added this after I got an error during processing, not sure of problem YET
     try:
         ref_seq = fasta.fetch(chr_name, ref_pos, read.reference_end)
-    except:
+    except (KeyError, IndexError, ValueError) as e:
         print(f"Warning could not load from reference sequence to construct REF: {chr_name}: {ref_pos}-{read.reference_end}",
               file=sys.stdout, flush=True)
         return None
@@ -595,7 +595,7 @@ def run_count_t7(bam_file,
                            zip(close_neighbour_indices_GLOBAL, close_neighbour_indices)]
             edits_match_overall = np.all(edits_match)
             if not edits_match_overall:
-                print("WARNING: Edits dont match between global and chromosome-specific indices!!!", file=sys.stdout,
+                print("WARNING: Edits don't match between global and chromosome-specific indices!!!", file=sys.stdout,
                                                                                                              flush=True)
 
             #### Sanity check; do the edits at these indices have distances that are consistent with the dists listed?
@@ -1189,7 +1189,7 @@ def run_count_t7(bam_file,
                 ### Only need to filter if is a edited cell.
                 cell_barcode = read.get_tag('CB')
                 
-                # Using filt bam means I shouldnt have to check against allt7
+                # Using filt bam means I shouldn't have to check against all t7
                 # I should also try prefilt using barcode whitelist
                 if (cell_barcode not in cell_barcodes):
                     continue
