@@ -80,6 +80,15 @@ def run(
     dry_run: Annotated[
         Optional[bool], typer.Option("--dry-run", "--dry_run", help="Preview without executing")
     ] = False,
+    resume: Annotated[
+        Optional[bool], typer.Option("--resume", help="Resume from last checkpoint if available")
+    ] = False,
+    enable_checkpoints: Annotated[
+        Optional[bool], typer.Option("--enable-checkpoints", help="Enable automatic checkpointing")
+    ] = False,
+    checkpoint_path: Annotated[
+        Optional[str], typer.Option("--checkpoint", help="Specific checkpoint file to resume from")
+    ] = None,
     log_file: Annotated[Optional[str], typer.Option("--log-file", help="Log file path")] = None,
     log_level: Annotated[
         Optional[str], typer.Option("--log-level", help="Log level (DEBUG, INFO, WARNING, ERROR)")
@@ -99,6 +108,15 @@ def run(
 
         # Mix config and arguments (args override config)
         sheriff run --config base.yaml --n_cpus 16
+
+        # Enable checkpointing for long runs
+        sheriff run --config analysis.yaml --enable-checkpoints
+
+        # Resume from last checkpoint
+        sheriff run --config analysis.yaml --resume
+
+        # Resume from specific checkpoint
+        sheriff run --config analysis.yaml --checkpoint .sheriff_checkpoints/checkpoint_20251115_102345.json
     """
     # Setup logging first
     logger = setup_logging(log_file=log_file, log_level=log_level)
@@ -204,6 +222,52 @@ def run(
     logger.info(f"Input BAM: {bam_file}")
     logger.info(f"CPUs: {n_cpus}")
 
+    # Initialize checkpoint manager (if enabled or resuming)
+    checkpoint_manager = None
+    resumed_checkpoint = None
+    if enable_checkpoints or resume:
+        from ..checkpoint import CheckpointManager
+
+        # Build config dict for checkpointing
+        pipeline_config = {
+            "bam_file": bam_file,
+            "ref_file": ref_file,
+            "barcode_file": barcode_file,
+            "gtf_file": gtf_file,
+            "parameters": {
+                "t7_barcode": t7_barcode,
+                "k": k,
+                "edit_dist": edit_dist,
+                "n_cpus": n_cpus,
+            },
+        }
+
+        checkpoint_dir = os.path.join(outdir if outdir else ".", ".sheriff_checkpoints")
+        checkpoint_manager = CheckpointManager(
+            checkpoint_dir=checkpoint_dir, config=pipeline_config, enabled=True
+        )
+
+        # Try to resume if requested
+        if resume:
+            resumed_checkpoint = checkpoint_manager.load(checkpoint_path)
+            if resumed_checkpoint:
+                checkpoint_manager.display_resume_info(resumed_checkpoint)
+                logger.info(f"Resuming from checkpoint: {resumed_checkpoint.get_progress_percent()}% complete")
+            elif checkpoint_path:
+                # User specified a checkpoint file that doesn't exist
+                console.print(f"[yellow]⚠ Checkpoint file not found: {checkpoint_path}[/yellow]")
+                console.print("[yellow]Starting from beginning...[/yellow]")
+            else:
+                # No checkpoint found, start fresh
+                console.print("[dim]No checkpoint found, starting from beginning...[/dim]")
+
+    # Initialize results collector
+    from ..results import PipelineResults
+    import time
+
+    results = PipelineResults()
+    results.start_time = time.time()
+
     # Run the pipeline
     try:
         run_count_t7(
@@ -233,10 +297,48 @@ def run(
             chunk_size_mb=chunk_size_mb,
         )
 
+        # Record end time
+        results.end_time = time.time()
+
+        # Collect pipeline metrics (mock data for now - would be populated by instrumented pipeline)
+        # In production, count_t7.py would pass metrics back or we'd parse output files
+        if outdir:
+            import glob
+
+            # Try to infer results from output files
+            edit_sites_file = os.path.join(outdir, "edit_site_info.txt")
+            if os.path.exists(edit_sites_file):
+                results.set_output("Edit Sites", edit_sites_file)
+
+            umi_file = os.path.join(outdir, "*umi*.mtx")
+            umi_files = glob.glob(umi_file)
+            if umi_files:
+                results.set_output("UMI Counts", umi_files[0])
+
+            gene_file = os.path.join(outdir, "*gene*.mtx")
+            gene_files = glob.glob(gene_file)
+            if gene_files:
+                results.set_output("Gene Counts", gene_files[0])
+
         logger.info("Pipeline completed successfully")
-        console.print("\n[green bold]✓ Pipeline completed successfully![/green bold]")
+
+        # Mark checkpoint as completed
+        if checkpoint_manager:
+            checkpoint_manager.mark_completed(success=True)
+            logger.info("Checkpoint marked as completed")
+
+        # Display results summary
+        if verbosity >= 1:
+            console.print("\n[green bold]✓ Pipeline completed successfully![/green bold]")
+            results.display_summary(show_performance=False, show_outputs=True)
+        else:
+            console.print("\n[green bold]✓ Pipeline completed successfully![/green bold]")
 
     except Exception as e:
+        # Record failure
+        if checkpoint_manager:
+            checkpoint_manager.mark_completed(success=False, error=str(e))
+
         logger.error(f"Pipeline failed: {e}", exc_info=True)
         console.print(f"\n[red bold]✗ Pipeline failed:[/red bold] {e}")
         raise typer.Exit(code=1)
