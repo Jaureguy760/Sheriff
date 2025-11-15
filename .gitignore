@@ -70,3 +70,8 @@ example_data/*.order
 *.tmp
 *.log
 dependency_notes.txt
+
+# Rust
+sheriff-rs/target/
+sheriff-rs/Cargo.lock
+*.rs.bk
