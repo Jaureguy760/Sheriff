@@ -75,3 +75,7 @@ dependency_notes.txt
 sheriff-rs/target/
 sheriff-rs/Cargo.lock
 *.rs.bk
+
+# Benchmark outputs (large binary files)
+benchmarks/output/*.bam
+benchmarks/output/*.bam.bai
