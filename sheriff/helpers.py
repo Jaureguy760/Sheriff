@@ -370,7 +370,7 @@ def bam_count_gene_umis_contig(bam_file, cell_barcodes_dict, gene_names, id_to_g
 
             cell_barcode = read.get_tag('CB')
             
-            # Using filt bam means I shouldnt have to check against allt7
+            # Using filt bam means I shouldn't have to check against all t7
             if (cell_barcode not in cell_barcodes_dict):
                 continue
 

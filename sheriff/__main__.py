@@ -34,7 +34,7 @@ blacklist_file: Annotated[
             "--blacklist",
             "--blacklist_file",
             help=(
-                "Bed file that species the location of blacklist regions, these generate alot of endogenuous t7 reads "
+                "Bed file that specifies the location of blacklist regions, these generate a lot of endogenous t7 reads "
                 "that can lead to slow processing time and false-positive edit-site calling."
                 )
             )
@@ -45,7 +45,7 @@ whitelist_file: Annotated[
             "--whitelist",
             "--whitelist_file",
             help=(
-                "Bed file that species the location of whitelist regions, which are known edit sites and so will call "
+                "Bed file that specifies the location of whitelist regions, which are known edit sites and so will call "
                 "any barcoded reads implying an edit site intersecting these regions as canonical edit sites."
                 )
             )
