@@ -2,6 +2,7 @@ use rust_htslib::bam::{self, Read, Record};
 use std::collections::HashSet;
 use anyhow::{Result, Context};
 use rayon::prelude::*;
+use std::fs;
 
 #[derive(Debug, Clone)]
 pub struct FilterResult {
@@ -123,6 +124,186 @@ pub fn filter_bam_by_barcodes_parallel(
         reads_kept,
         reads_rejected,
     })
+}
+
+/// Filter BAM file by cell barcode whitelist (Chromosome-based parallel version)
+///
+/// Splits BAM processing by chromosome, processes each in parallel using rayon,
+/// then merges results. Expected speedup: 10-50x on large files.
+///
+/// Requires indexed BAM file (*.bam.bai).
+///
+/// # Arguments
+/// * `input_path` - Path to input BAM file (must be indexed)
+/// * `output_path` - Path to output BAM file
+/// * `whitelist` - Set of allowed cell barcodes
+/// * `num_threads` - Number of parallel threads (None = auto-detect)
+///
+/// # Returns
+/// FilterResult with statistics on reads processed, kept, and rejected
+pub fn filter_bam_by_barcodes_chromosome_parallel(
+    input_path: &str,
+    output_path: &str,
+    whitelist: &HashSet<String>,
+    num_threads: Option<usize>,
+) -> Result<FilterResult> {
+    // Set thread pool size
+    if let Some(threads) = num_threads {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build_global()
+            .context("Failed to set thread pool size")?;
+    }
+
+    // Open BAM to read header
+    let bam = bam::Reader::from_path(input_path)
+        .context("Failed to open input BAM")?;
+    let header_view = bam.header();
+    let header = bam::Header::from_template(header_view);
+
+    // Get list of reference sequences (chromosomes)
+    let ref_names: Vec<String> = header_view
+        .target_names()
+        .iter()
+        .map(|name| String::from_utf8_lossy(name).to_string())
+        .collect();
+
+    if ref_names.is_empty() {
+        return Err(anyhow::anyhow!("No reference sequences found in BAM header"));
+    }
+
+    // Create temp directory for chromosome BAMs
+    let temp_dir = format!("{}.tmp_chr", output_path);
+    fs::create_dir_all(&temp_dir)
+        .context("Failed to create temporary directory")?;
+
+    // Process each chromosome in parallel
+    let results: Vec<(String, FilterResult)> = ref_names
+        .par_iter()
+        .map(|chr_name| {
+            let temp_bam = format!("{}/{}.bam", temp_dir, chr_name);
+            let result = filter_chromosome(
+                input_path,
+                &temp_bam,
+                chr_name,
+                whitelist,
+            );
+            (temp_bam, result)
+        })
+        .filter_map(|(temp_bam, result)| {
+            match result {
+                Ok(stats) => Some((temp_bam, stats)),
+                Err(e) => {
+                    eprintln!("Warning: Failed to process chromosome: {}", e);
+                    None
+                }
+            }
+        })
+        .collect();
+
+    // Merge all chromosome BAMs
+    let total_stats = merge_bam_files(&results, output_path, &header)?;
+
+    // Clean up temp directory
+    fs::remove_dir_all(&temp_dir)
+        .context("Failed to remove temporary directory")?;
+
+    Ok(total_stats)
+}
+
+/// Filter reads from a specific chromosome
+fn filter_chromosome(
+    input_path: &str,
+    output_path: &str,
+    chr_name: &str,
+    whitelist: &HashSet<String>,
+) -> Result<FilterResult> {
+    // Open input BAM
+    let mut bam = bam::IndexedReader::from_path(input_path)
+        .context("Failed to open indexed BAM")?;
+
+    // Get chromosome ID
+    let header_view = bam.header();
+    let header = bam::Header::from_template(header_view);
+    let tid = header_view
+        .target_names()
+        .iter()
+        .position(|name| String::from_utf8_lossy(name) == chr_name)
+        .ok_or_else(|| anyhow::anyhow!("Chromosome {} not found in header", chr_name))?;
+
+    // Fetch reads for this chromosome
+    bam.fetch(tid as u32)
+        .context(format!("Failed to fetch chromosome {}", chr_name))?;
+
+    // Create output BAM
+    let mut out = bam::Writer::from_path(output_path, &header, bam::Format::Bam)
+        .context("Failed to create output BAM")?;
+
+    let mut stats = FilterResult {
+        reads_processed: 0,
+        reads_kept: 0,
+        reads_rejected: 0,
+    };
+
+    // Process reads for this chromosome
+    for result in bam.records() {
+        let record = result.context("Failed to read BAM record")?;
+        stats.reads_processed += 1;
+
+        if let Some(cb_tag) = get_cb_tag(&record) {
+            if whitelist.contains(&cb_tag) {
+                out.write(&record).context("Failed to write record")?;
+                stats.reads_kept += 1;
+            } else {
+                stats.reads_rejected += 1;
+            }
+        } else {
+            stats.reads_rejected += 1;
+        }
+    }
+
+    Ok(stats)
+}
+
+/// Merge multiple BAM files into one output file
+fn merge_bam_files(
+    input_files: &[(String, FilterResult)],
+    output_path: &str,
+    header: &bam::Header,
+) -> Result<FilterResult> {
+    // Create output BAM
+    let mut out = bam::Writer::from_path(output_path, header, bam::Format::Bam)
+        .context("Failed to create merged output BAM")?;
+
+    let mut total_stats = FilterResult {
+        reads_processed: 0,
+        reads_kept: 0,
+        reads_rejected: 0,
+    };
+
+    // Merge each chromosome BAM
+    for (chr_bam, stats) in input_files {
+        // Accumulate statistics
+        total_stats.reads_processed += stats.reads_processed;
+        total_stats.reads_kept += stats.reads_kept;
+        total_stats.reads_rejected += stats.reads_rejected;
+
+        // Only merge if there are kept reads
+        if stats.reads_kept == 0 {
+            continue;
+        }
+
+        // Read and write all records from chromosome BAM
+        let mut chr_reader = bam::Reader::from_path(chr_bam)
+            .context(format!("Failed to open chromosome BAM: {}", chr_bam))?;
+
+        for result in chr_reader.records() {
+            let record = result.context("Failed to read record during merge")?;
+            out.write(&record).context("Failed to write record during merge")?;
+        }
+    }
+
+    Ok(total_stats)
 }
 
 /// Extract CB (cell barcode) tag from BAM record

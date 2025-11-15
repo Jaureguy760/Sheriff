@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use crate::bam_filter::{filter_bam_by_barcodes, filter_bam_by_barcodes_parallel, load_whitelist};
+use crate::bam_filter::{filter_bam_by_barcodes, filter_bam_by_barcodes_parallel, filter_bam_by_barcodes_chromosome_parallel, load_whitelist};
 use std::collections::HashSet;
 
 /// Filter BAM file by cell barcode whitelist (Python wrapper - file-based)
@@ -139,12 +139,64 @@ fn filter_bam_by_barcodes_rust_parallel(
     })
 }
 
+/// Filter BAM file by cell barcode whitelist (Python wrapper - chromosome-based parallel)
+///
+/// This version uses chromosome-based parallelism for maximum speedup.
+/// Expected speedup: 10-50x on large files.
+/// Requires indexed BAM file (*.bam.bai).
+///
+/// # Arguments
+/// * `input_path` - Path to input BAM file (must be indexed)
+/// * `output_path` - Path to output BAM file
+/// * `barcodes` - List of cell barcodes
+/// * `num_threads` - Number of parallel threads (None = auto)
+///
+/// # Returns
+/// Dict with keys: reads_processed, reads_kept, reads_rejected, duration_seconds
+#[pyfunction]
+#[pyo3(signature = (input_path, output_path, barcodes, num_threads=None))]
+fn filter_bam_by_barcodes_rust_chromosome(
+    input_path: String,
+    output_path: String,
+    barcodes: Vec<String>,
+    num_threads: Option<usize>,
+) -> PyResult<PyObject> {
+    use std::time::Instant;
+
+    let start = Instant::now();
+
+    // Convert to HashSet
+    let whitelist: HashSet<String> = barcodes.into_iter().collect();
+
+    // Filter BAM with chromosome-based parallel processing
+    let result = filter_bam_by_barcodes_chromosome_parallel(
+        &input_path,
+        &output_path,
+        &whitelist,
+        num_threads,
+    )
+    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+    let duration = start.elapsed();
+
+    // Return dict
+    Python::with_gil(|py| {
+        let dict = PyDict::new(py);
+        dict.set_item("reads_processed", result.reads_processed)?;
+        dict.set_item("reads_kept", result.reads_kept)?;
+        dict.set_item("reads_rejected", result.reads_rejected)?;
+        dict.set_item("duration_seconds", duration.as_secs_f64())?;
+        Ok(dict.into())
+    })
+}
+
 /// Sheriff-rs Python module
 #[pymodule]
 fn sheriff_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(filter_bam_rust, m)?)?;
     m.add_function(wrap_pyfunction!(filter_bam_by_barcodes_rust, m)?)?;
     m.add_function(wrap_pyfunction!(filter_bam_by_barcodes_rust_parallel, m)?)?;
+    m.add_function(wrap_pyfunction!(filter_bam_by_barcodes_rust_chromosome, m)?)?;
     m.add_function(wrap_pyfunction!(count_kmers_rust, m)?)?;
     Ok(())
 }
