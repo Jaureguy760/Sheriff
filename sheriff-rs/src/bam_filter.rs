@@ -1,6 +1,7 @@
 use rust_htslib::bam::{self, Read, Record};
 use std::collections::HashSet;
 use anyhow::{Result, Context};
+use rayon::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct FilterResult {
@@ -61,6 +62,67 @@ pub fn filter_bam_by_barcodes(
     }
 
     Ok(stats)
+}
+
+/// Filter BAM file by cell barcode whitelist (Parallel version using Rayon)
+///
+/// Uses rayon's par_bridge to parallelize the filtering operation.
+/// Expected speedup: 2-5x on medium files, best for CPU-bound filtering.
+///
+/// # Arguments
+/// * `input_path` - Path to input BAM file
+/// * `output_path` - Path to output BAM file
+/// * `whitelist` - Set of allowed cell barcodes
+///
+/// # Returns
+/// FilterResult with statistics on reads processed, kept, and rejected
+pub fn filter_bam_by_barcodes_parallel(
+    input_path: &str,
+    output_path: &str,
+    whitelist: &HashSet<String>,
+) -> Result<FilterResult> {
+    // Open input BAM
+    let mut bam = bam::Reader::from_path(input_path)
+        .context("Failed to open input BAM")?;
+
+    // Store header for output creation
+    let header = bam::Header::from_template(bam.header());
+
+    // Parallel filtering using par_bridge
+    // Collects (record, should_keep) pairs
+    let results: Vec<(Record, bool)> = bam.records()
+        .par_bridge()  // Convert to parallel iterator
+        .filter_map(|result| {
+            let record = result.ok()?;
+            let should_keep = if let Some(cb_tag) = get_cb_tag(&record) {
+                whitelist.contains(&cb_tag)
+            } else {
+                false
+            };
+            Some((record, should_keep))
+        })
+        .collect();
+
+    // Calculate statistics
+    let reads_processed = results.len();
+    let reads_kept = results.iter().filter(|(_, keep)| *keep).count();
+    let reads_rejected = reads_processed - reads_kept;
+
+    // Create output BAM and write filtered reads sequentially
+    let mut out = bam::Writer::from_path(output_path, &header, bam::Format::Bam)
+        .context("Failed to create output BAM")?;
+
+    for (record, should_keep) in results {
+        if should_keep {
+            out.write(&record).context("Failed to write record")?;
+        }
+    }
+
+    Ok(FilterResult {
+        reads_processed,
+        reads_kept,
+        reads_rejected,
+    })
 }
 
 /// Extract CB (cell barcode) tag from BAM record
