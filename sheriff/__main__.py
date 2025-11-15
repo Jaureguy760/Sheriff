@@ -4,13 +4,87 @@ from typing_extensions import Annotated
 
 import typer
 import sys
+import os
 
 # Local Imports
 from .count_t7 import run_count_t7
+from . import __version__
 
 # app = typer.Typer()
 # app = typer.Typer(pretty_exceptions_show_locals=False)
-app = typer.Typer(pretty_exceptions_short=False)
+app = typer.Typer(
+    pretty_exceptions_short=False,
+    help="Sheriff - CRISPR/Cas9 Edit Site Detection in Single Cells"
+)
+
+
+def version_callback(value: bool):
+    """Print version and exit."""
+    if value:
+        typer.echo(f"Sheriff version {__version__}")
+        raise typer.Exit()
+
+
+def validate_input_files(
+    bam_file: str,
+    ref_file: str,
+    barcode_file: str,
+    gtf_file: str,
+    blacklist_file: Optional[str] = None,
+    whitelist_file: Optional[str] = None,
+    cnv_file: Optional[str] = None,
+    blacklist_seqs: Optional[str] = None,
+) -> None:
+    """Validate that required input files exist before processing."""
+    errors = []
+
+    # Check required files
+    required_files = {
+        "BAM file": bam_file,
+        "Reference FASTA": ref_file,
+        "Barcode file": barcode_file,
+        "GTF file": gtf_file,
+    }
+
+    for name, filepath in required_files.items():
+        if not os.path.exists(filepath):
+            errors.append(f"  ✗ {name} not found: {filepath}")
+
+    # Check optional files if provided
+    optional_files = {
+        "Blacklist file": blacklist_file,
+        "Whitelist file": whitelist_file,
+        "CNV file": cnv_file,
+        "Blacklist sequences": blacklist_seqs,
+    }
+
+    for name, filepath in optional_files.items():
+        if filepath is not None and not os.path.exists(filepath):
+            errors.append(f"  ✗ {name} not found: {filepath}")
+
+    if errors:
+        typer.secho("\n❌ Input validation failed:", fg=typer.colors.RED, bold=True)
+        for error in errors:
+            typer.echo(error)
+        typer.echo("")
+        raise typer.Exit(code=1)
+
+
+@app.callback()
+def common_options(
+    version: Annotated[
+        Optional[bool],
+        typer.Option(
+            "--version",
+            "-V",
+            callback=version_callback,
+            is_eager=True,
+            help="Show version and exit"
+        )
+    ] = None,
+):
+    """Sheriff - CRISPR/Cas9 Edit Site Detection in Single Cells"""
+    pass
 
 @app.command()
 def get_t7_edits(
@@ -202,11 +276,63 @@ chunk_size_mb: Annotated[
                       )
                 )
             ] = 250,
+    dry_run: Annotated[
+            Optional[bool],
+            typer.Option(
+                "--dry-run",
+                "--dry_run",
+                help=("Preview what will be executed without running the pipeline. "
+                      "Validates inputs and shows configuration.")
+                )
+            ] = False,
 ):
-    
+
+    # Validate input files before processing
+    validate_input_files(
+        bam_file=bam_file,
+        ref_file=ref_file,
+        barcode_file=barcode_file,
+        gtf_file=gtf_file,
+        blacklist_file=blacklist_file,
+        whitelist_file=whitelist_file,
+        cnv_file=cnv_file,
+        blacklist_seqs=blacklist_seqs,
+    )
+
+    # Dry-run mode: show configuration and exit
+    if dry_run:
+        typer.secho("\n🔍 DRY RUN MODE - Preview Only", fg=typer.colors.CYAN, bold=True)
+        typer.echo("\n✓ Input validation passed")
+        typer.echo("\nConfiguration:")
+        typer.echo(f"  BAM file: {bam_file}")
+        typer.echo(f"  Reference: {ref_file}")
+        typer.echo(f"  Barcodes: {barcode_file}")
+        typer.echo(f"  GTF: {gtf_file}")
+        typer.echo(f"  T7 barcode: {t7_barcode}")
+        typer.echo(f"  K-mer size: {k}")
+        typer.echo(f"  Edit distance: {edit_dist}")
+        typer.echo(f"  Min cells per edit: {edit_site_min_cells}")
+        typer.echo(f"  CPUs: {n_cpus}")
+        typer.echo(f"  Output dir: {outdir if outdir else 'Current directory'}")
+
+        # Optional files
+        if blacklist_file:
+            typer.echo(f"  Blacklist: {blacklist_file}")
+        if whitelist_file:
+            typer.echo(f"  Whitelist: {whitelist_file}")
+        if cnv_file:
+            typer.echo(f"  CNV file: {cnv_file}")
+
+        typer.secho("\n✓ Dry run complete - no files were modified", fg=typer.colors.GREEN)
+        raise typer.Exit()
+
+    # Show processing start message
+    if verbosity >= 1:
+        typer.secho(f"\n🚀 Sheriff v{__version__} - Starting analysis", fg=typer.colors.GREEN, bold=True)
+        typer.echo(f"  BAM: {bam_file}")
+        typer.echo(f"  Output: {outdir if outdir else 'Current directory'}\n")
+
     # Run
-    
-    # Test outputs
     run_count_t7(bam_file=bam_file,
                  ref_file=ref_file,
                  barcode_file=barcode_file,
