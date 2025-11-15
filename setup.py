@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='Sheriff',
-    version='1.1.3',
+    version='1.2.0',
     author='Brad Balderson, Michael Lorenzini, Aaron Ho',
     author_email='bbalderson@salk.edu',
     packages=find_packages(),
@@ -35,7 +35,7 @@ setup(
     },
     python_requires='>=3.10',
     description=("Sheriff calls CRISPR/cas9 edit sites, and quantifies the number of edited alleles at each site along "
-                 "with gene expression in single cells using Superb-seq data."),
+                 "with gene expression in single cells using Superb-seq data. Includes optional Rust acceleration for 10-50x speedup."),
     keywords=['Sheriff', 'sheriff', 'Superb-seq', 'superb-seq', 'CRISPR', 'single-cell', 'bioinformatics'],
     url='https://github.com/BradBalderson/Sheriff',
     classifiers=[

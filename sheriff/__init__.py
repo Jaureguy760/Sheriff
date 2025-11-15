@@ -5,7 +5,7 @@ Sheriff processes aligned Superb-seq data to call edit sites and quantify
 gene expression in single cells.
 """
 
-__version__ = "1.1.3"
+__version__ = "1.2.0"
 __author__ = "Brad Balderson, Michael Lorenzini, Aaron Ho"
 __email__ = "bbalderson@salk.edu"
 __license__ = "BSD"
