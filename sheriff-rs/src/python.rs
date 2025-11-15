@@ -97,6 +97,52 @@ fn count_kmers_rust(sequence: String, k: usize) -> Vec<u8> {
     crate::kmer::count_kmers(sequence.as_bytes(), k)
 }
 
+/// Match k-mers in DNA sequence against whitelist (Python wrapper)
+///
+/// Finds all k-mers in sequence that appear in the whitelist.
+/// Handles 'N' bases by skipping k-mers containing them.
+///
+/// # Arguments
+/// * `sequence` - DNA sequence string
+/// * `k` - K-mer length
+/// * `whitelist` - Optional list of k-mer hashes to match against (None = all k-mers)
+/// * `output_hash` - Return hashes (true) or k-mer strings (false)
+///
+/// # Returns
+/// List of matching k-mer hashes (if output_hash=True) or strings (if output_hash=False)
+#[pyfunction]
+#[pyo3(signature = (sequence, k, whitelist=None, output_hash=true))]
+fn match_kmer_rust(
+    sequence: String,
+    k: usize,
+    whitelist: Option<Vec<usize>>,
+    output_hash: bool,
+) -> PyResult<Vec<PyObject>> {
+    use std::collections::HashSet;
+
+    // Convert whitelist to HashSet
+    let whitelist_set = whitelist.map(|v| v.into_iter().collect::<HashSet<usize>>());
+
+    // Call Rust implementation
+    let matches = crate::kmer::match_kmer(
+        &sequence,
+        k,
+        whitelist_set.as_ref(),
+        output_hash,
+    );
+
+    // Convert results to Python objects
+    Python::with_gil(|py| {
+        let result: Vec<PyObject> = matches.iter().map(|m| {
+            match m {
+                crate::kmer::KmerMatch::Hash(h) => h.to_object(py),
+                crate::kmer::KmerMatch::String(s) => s.to_object(py),
+            }
+        }).collect();
+        Ok(result)
+    })
+}
+
 /// Filter BAM file by cell barcode whitelist (Python wrapper - parallel version)
 ///
 /// This version uses rayon's par_bridge for parallel filtering.
@@ -198,5 +244,6 @@ fn sheriff_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(filter_bam_by_barcodes_rust_parallel, m)?)?;
     m.add_function(wrap_pyfunction!(filter_bam_by_barcodes_rust_chromosome, m)?)?;
     m.add_function(wrap_pyfunction!(count_kmers_rust, m)?)?;
+    m.add_function(wrap_pyfunction!(match_kmer_rust, m)?)?;
     Ok(())
 }
