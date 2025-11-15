@@ -11,6 +11,7 @@ Main Modules
 
    count_t7
    helpers
+   rust
 
 Quick Start
 -----------
