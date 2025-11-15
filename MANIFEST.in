@@ -1,0 +1,76 @@
+# Include documentation and metadata
+include README.md
+include LICENSE.md
+include CHANGELOG.md
+include CONTRIBUTING.md
+include requirements.txt
+include pyproject.toml
+
+# Include documentation files
+recursive-include docs *.rst *.py *.txt Makefile make.bat
+include docs/requirements.txt
+prune docs/build
+
+# Include example data
+recursive-include example_data *.txt *.bed *.tsv
+# Note: Large BAM/reference files excluded from package (too large)
+# Users should download separately or use own data
+
+# Include benchmark scripts
+recursive-include benchmarks *.py *.md *.txt
+include benchmarks/README.md
+
+# Include sheriff Python package
+recursive-include sheriff *.py
+
+# Include Rust source (for building from source)
+recursive-include sheriff-rs *.rs *.toml
+include sheriff-rs/Cargo.toml
+include sheriff-rs/Cargo.lock
+include sheriff-rs/README.md
+
+# Include GitHub templates and configs
+recursive-include .github *.yml *.yaml *.md
+
+# Include configuration files
+include .coveragerc
+include .codecov.yml
+include .pre-commit-config.yaml
+include .gitignore
+
+# Include planning and documentation
+include *.md
+include RUST_QUICKSTART.md
+include RUST_IMPLEMENTATION_PLAN.md
+include OPTIMIZATION_ANALYSIS.md
+include PERFORMANCE_OPTIMIZATION.md
+include PARALLEL_BAM_PROCESSING.md
+include PROFESSIONALIZATION_PLAN.md
+include KMER_INTEGRATION_PLAN.md
+include ENGINEERING_PLAN_EXECUTION.md
+
+# Exclude unwanted files
+global-exclude *.py[cod]
+global-exclude __pycache__
+global-exclude *.so
+global-exclude *.dylib
+global-exclude .DS_Store
+global-exclude *.swp
+global-exclude *.swo
+prune .git
+prune .github/workflows
+prune Sheriff.egg-info
+prune dist
+prune build
+prune htmlcov
+prune .pytest_cache
+prune .mypy_cache
+prune .ruff_cache
+
+# Exclude large data files (users download separately)
+exclude example_data/*.bam
+exclude example_data/*.bam.bai
+exclude example_data/*.fa
+exclude example_data/*.fa.fai
+exclude example_data/*.gtf
+exclude example_data/*.gz
