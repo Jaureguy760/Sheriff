@@ -1,0 +1,8 @@
+# Documentation build requirements
+sphinx>=5.0
+sphinx-rtd-theme>=1.2.0
+sphinx-copybutton>=0.5.0
+myst-parser>=1.0.0
+
+# For autodoc (mock these to avoid heavy dependencies)
+# The actual packages are mocked in conf.py
