@@ -1,0 +1,6 @@
+# Benchmarking dependencies
+psutil>=5.9.0
+memory_profiler>=0.61.0
+matplotlib>=3.5.0  # For mprof plot
+snakeviz>=2.1.0  # For cProfile visualization
+line_profiler>=4.0.0  # For line-by-line profiling
