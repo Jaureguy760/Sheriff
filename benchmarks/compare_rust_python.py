@@ -4,17 +4,24 @@ Compare Rust BAM filter vs Python pysam iteration performance
 
 This script benchmarks:
 1. Python baseline using pysam (current implementation)
-2. Rust optimized using sheriff-rs CLI
+2. Rust optimized using sheriff_rs Python module
 
 Expected speedup: 10-50x with Rust
 """
 import time
 import pysam
-import subprocess
 import json
 import os
 import sys
 from pathlib import Path
+
+# Import Sheriff's bam_utils
+try:
+    from sheriff.bam_utils import filter_bam_by_barcodes, HAS_RUST
+except ImportError:
+    print("ERROR: Could not import sheriff.bam_utils")
+    print("Please install Sheriff: pip install -e .")
+    sys.exit(1)
 
 def benchmark_python_filter(bam_path, whitelist_path, output_path):
     """Python baseline using pysam"""
@@ -65,56 +72,35 @@ def benchmark_python_filter(bam_path, whitelist_path, output_path):
     }
 
 def benchmark_rust_filter(bam_path, whitelist_path, output_path):
-    """Rust implementation using sheriff-rs CLI"""
-    # Check if Rust binary exists
-    rust_bin = 'sheriff-rs/target/release/sheriff-rs'
-
-    if not os.path.exists(rust_bin):
-        print(f"  ERROR: Rust binary not found at {rust_bin}")
-        print(f"  Please build with: cd sheriff-rs && cargo build --release")
+    """Rust implementation using sheriff_rs Python module"""
+    if not HAS_RUST:
+        print(f"  ERROR: Rust module not available")
+        print(f"  Please install: cd sheriff-rs && maturin build --release --features python")
+        print(f"  Then: pip install target/wheels/sheriff_rs-*.whl")
         return None
 
-    cmd = [
-        rust_bin,
-        'filter-bam',
-        '--input', bam_path,
-        '--output', output_path,
-        '--whitelist', whitelist_path
-    ]
+    print("  Running Rust filter via Python module...")
 
-    print("  Running Rust filter...")
+    # Load whitelist
+    with open(whitelist_path) as f:
+        whitelist = set(line.strip() for line in f)
+
     start = time.time()
-    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    # Use sheriff.bam_utils which automatically uses Rust
+    result = filter_bam_by_barcodes(
+        bam_path,
+        output_path,
+        whitelist,
+        use_rust=True,
+        verbose=False  # Don't print progress
+    )
+
     duration = time.time() - start
+    result['duration_seconds'] = duration
+    result['throughput_reads_per_sec'] = result['reads_processed'] / duration
 
-    if result.returncode != 0:
-        print(f"  ERROR: Rust command failed:")
-        print(result.stderr)
-        return None
-
-    # Parse JSON output from Rust
-    try:
-        # Find JSON in output (first line that starts with '{')
-        for line in result.stdout.split('\n'):
-            if line.strip().startswith('{'):
-                stats = json.loads(line)
-                break
-        else:
-            print("  ERROR: Could not find JSON output from Rust")
-            print(result.stdout)
-            return None
-    except json.JSONDecodeError as e:
-        print(f"  ERROR: Failed to parse Rust output: {e}")
-        print(result.stdout)
-        return None
-
-    return {
-        'reads_processed': stats['reads_processed'],
-        'reads_kept': stats['reads_kept'],
-        'reads_rejected': stats['reads_rejected'],
-        'duration_seconds': duration,
-        'throughput_reads_per_sec': stats['throughput_reads_per_sec']
-    }
+    return result
 
 def format_number(n):
     """Format number with commas"""
