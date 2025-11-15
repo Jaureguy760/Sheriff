@@ -1,19 +1,38 @@
-Sheriff 
+Sheriff
 ==================
 ## Identification of CRISPR/cas9 edit sites in single cells
+
+[![Documentation Status](https://readthedocs.org/projects/sheriff/badge/?version=latest)](https://sheriff.readthedocs.io/en/latest/?badge=latest)
+[![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/License-BSD-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
+
 <img src="https://github.com/BradBalderson/Sheriff/blob/main/img/sheriff2.png" alt="Sheriff Badge" width="600">
 
-**Sheriff processes aligned Superb-seq data to call edit sites and quantify gene expression in single cells** 
+**Sheriff processes aligned Superb-seq data to call edit sites and quantify gene expression in single cells**
+
+📚 **[Read the full documentation at sheriff.readthedocs.io](https://sheriff.readthedocs.io/)**
 
 The inputted bam must be the annotated bam file outputted from split-pipe, which is available after creating an account at [Parse Biosciences](https://support.parsebiosciences.com/hc/en-us/articles/17200056667924-Pipeline-Download-Current-Version).
 
 For split-pipe version and commands used to process the fastq files to the annotated bam file, please see the [superb_analysis repository](https://github.com/BradBalderson/superb_analysis/tree/main).
 
+Quick Links
+-----------
+
+* 📖 [Full Documentation](https://sheriff.readthedocs.io/)
+* 🚀 [Installation Guide](https://sheriff.readthedocs.io/en/latest/installation.html)
+* 📘 [Tutorial](https://sheriff.readthedocs.io/en/latest/tutorial.html)
+* 📋 [API Reference](https://sheriff.readthedocs.io/en/latest/api/modules.html)
+* 🐛 [Issue Tracker](https://github.com/BradBalderson/Sheriff/issues)
+* 🤝 [Contributing](CONTRIBUTING.md)
+
 Install
 -------
 Please replace 'mamba' with 'conda' if not installed, mamba is much faster however (we recommend installing mamba).
 
-Expected install time is approximately 1-minute. 
+Expected install time is approximately 1-minute.
+
+For detailed installation instructions, see the [Installation Guide](https://sheriff.readthedocs.io/en/latest/installation.html). 
 
 The current version has been tested with python 3.10 using the conda environment setup specified below, 
 on both linux (Rocky 9 distro) and macOS Sonoma 14.1.  
@@ -36,6 +55,8 @@ To install from source:
 Usage
 -----
     sheriff --help
+
+For detailed usage instructions and all parameters, see the [Usage Guide](https://sheriff.readthedocs.io/en/latest/usage.html).
 
      Usage: sheriff [OPTIONS] BAM_FILE REF_FILE BARCODE_FILE GTF_FILE
     
@@ -98,6 +119,8 @@ Expected run-time for data preparation below is ~2 minutes.
 
 Assumes are in the Sheriff directory.
 
+For a complete step-by-step tutorial, see the [Tutorial](https://sheriff.readthedocs.io/en/latest/tutorial.html).
+
 #### Preparing reference genome
     wget http://ftp.ensembl.org/pub/release-110/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz -O example_data/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
     gzip -d example_data/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
@@ -141,8 +164,10 @@ Expected run time for this demo is <30 seconds.
 Output
 ------
 
-***NOTE*** the parquet.gz files listed below are a binary format (even when unzipped). 
+***NOTE*** the parquet.gz files listed below are a binary format (even when unzipped).
 Example code to read these files in Python and R is provided below.
+
+For detailed descriptions of all output files, see the [Output Files Guide](https://sheriff.readthedocs.io/en/latest/outputs.html).
 
 The output directory for this example is: 
 
@@ -200,12 +225,27 @@ Joint single-cell profiling of CRISPR-Cas9 edits and transcriptomes reveals wide
 Michael H. Lorenzini, Brad Balderson, Karthyayani Sajeev, Aaron J. Ho, Graham McVicker
 bioRxiv 2025.02.07.636966; doi: https://doi.org/10.1101/2025.02.07.636966
 
+Documentation
+-------------
+
+The complete documentation is available at **[sheriff.readthedocs.io](https://sheriff.readthedocs.io/)** and includes:
+
+* Installation instructions
+* Comprehensive tutorials
+* API reference with auto-generated documentation
+* Troubleshooting guide
+* Contributing guidelines
+
 Contact
 -------
 
 Authors: Brad Balderson, Mickey Lorenzini, Aaron Ho, Graham McVicker
 
 Contact:  bbalderson@salk.edu
+
+* 🐛 Report bugs: [GitHub Issues](https://github.com/BradBalderson/Sheriff/issues)
+* 📖 Documentation: [sheriff.readthedocs.io](https://sheriff.readthedocs.io/)
+* 🤝 Contribute: See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 Change log
 -------

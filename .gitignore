@@ -40,6 +40,12 @@ dmypy.json
 # Jupyter Notebook
 .ipynb_checkpoints
 
+# Documentation
+docs/build/
+docs/_build/
+.doctrees
+htmlcov
+
 # Output directories
 subset_*_sheriff_output/
 *_sheriff_output/

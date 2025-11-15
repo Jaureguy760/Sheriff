@@ -49,6 +49,12 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0",
 ]
+docs = [
+    "sphinx>=5.0",
+    "sphinx-rtd-theme>=1.2.0",
+    "sphinx-copybutton>=0.5.0",
+    "myst-parser>=1.0.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/BradBalderson/Sheriff"
