@@ -31,6 +31,7 @@ def filter_bam_by_barcodes(
     output_bam: str,
     cell_barcodes: Set[str],
     use_rust: bool = True,
+    use_parallel: bool = False,
     verbose: bool = True
 ) -> Dict[str, int]:
     """
@@ -44,6 +45,8 @@ def filter_bam_by_barcodes(
         output_bam: Output BAM file path
         cell_barcodes: Set of allowed cell barcodes
         use_rust: Prefer Rust if available (default True)
+        use_parallel: Use parallel processing (rayon par_bridge, default False)
+                      Provides 2-5x speedup on medium/large files
         verbose: Print performance information (default True)
 
     Returns:
@@ -51,14 +54,21 @@ def filter_bam_by_barcodes(
     """
     if HAS_RUST and use_rust:
         if verbose:
-            print(f"  Using Rust acceleration for BAM filtering...")
+            mode = "parallel" if use_parallel else "sequential"
+            print(f"  Using Rust acceleration for BAM filtering ({mode})...")
 
         # Use direct barcode list (avoids temporary file overhead)
         barcodes_list = list(cell_barcodes)
 
-        result = sheriff_rs.filter_bam_by_barcodes_rust(
-            input_bam, output_bam, barcodes_list
-        )
+        # Choose sequential or parallel version
+        if use_parallel:
+            result = sheriff_rs.filter_bam_by_barcodes_rust_parallel(
+                input_bam, output_bam, barcodes_list
+            )
+        else:
+            result = sheriff_rs.filter_bam_by_barcodes_rust(
+                input_bam, output_bam, barcodes_list
+            )
 
         if verbose:
             duration = result.get('duration_seconds', 0)
@@ -66,10 +76,11 @@ def filter_bam_by_barcodes(
                 throughput = result['reads_processed'] / duration
             else:
                 throughput = 0
+            mode_str = "Rust-parallel" if use_parallel else "Rust"
             print(f"    Processed {result['reads_processed']:,} reads")
             print(f"    Kept {result['reads_kept']:,} reads ({100*result['reads_kept']/max(1, result['reads_processed']):.1f}%)")
             print(f"    Duration: {duration:.2f}s")
-            print(f"    Throughput: {throughput:,.0f} reads/sec (Rust)")
+            print(f"    Throughput: {throughput:,.0f} reads/sec ({mode_str})")
 
         return result
     else:
