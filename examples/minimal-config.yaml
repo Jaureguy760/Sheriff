@@ -1,0 +1,11 @@
+# Sheriff Configuration File
+# Generated template - customize for your analysis
+#
+# Documentation: https://github.com/BradBalderson/Sheriff
+
+version: 1.2.0
+input:
+  bam_file: path/to/sample.bam
+  ref_file: path/to/genome.fa
+  barcode_file: path/to/barcodes.txt
+  gtf_file: path/to/genes.gtf

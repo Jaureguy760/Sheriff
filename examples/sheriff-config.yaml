@@ -1,0 +1,45 @@
+# Sheriff Configuration File
+# Generated template - customize for your analysis
+#
+# Documentation: https://github.com/BradBalderson/Sheriff
+
+version: 1.2.0
+input:
+  bam_file: path/to/sample.bam
+  ref_file: path/to/genome.fa
+  barcode_file: path/to/barcodes.txt
+  gtf_file: path/to/genes.gtf
+filters:
+  blacklist_file: null
+  whitelist_file: null
+  blacklist_seqs: null
+  cnv_file: null
+parameters:
+  t7_barcode: GGGAGAGTAT
+  k: 6
+  edit_dist: 140
+  stranded_edit_dist: 15
+  edit_site_min_cells: 3
+  nonbc_edit_dist: 1000
+  ploidy: 2
+  mrna_count_mode: all
+processing:
+  n_cpus: 1
+  chunk_size_mb: 250
+  verbosity: 1
+output:
+  outdir: null
+  edit_site_rev_comp_filt: true
+  uncorrected_gene_count: false
+resume:
+  enabled: false
+  checkpoint_dir: .sheriff_checkpoints
+  checkpoint_interval: 5
+logging:
+  file: null
+  level: INFO
+  format: detailed
+profiling:
+  enabled: false
+  output: sheriff_profile.json
+  memory_tracking: true

@@ -1,0 +1,61 @@
+# Sheriff Configuration File - Example Analysis
+# This example uses the test data included with Sheriff
+#
+# Usage: sheriff run --config examples/example-analysis.yaml
+
+version: "1.2.0"
+
+# Input files (required)
+input:
+  bam_file: "example_data/barcode_headAligned_anno.sorted.edit_regions_200kb.bam"
+  ref_file: "path/to/genome.fa"  # Update with your reference genome
+  barcode_file: "example_data/barcode_whitelist.500-cell.txt"
+  gtf_file: "path/to/genes.gtf"  # Update with your GTF file
+
+# Optional filter files
+filters:
+  blacklist_file: "example_data/black_100x_peaks_by_qval.simple_repeats_50N.EXTRA.bed"
+  whitelist_file: "example_data/edit_site_white_list.txt"
+  blacklist_seqs: "example_data/blacklist_seqs.txt"
+  cnv_file: "example_data/K562_CNV_hg19.tsv"
+
+# Pipeline parameters
+parameters:
+  t7_barcode: "GGGAGAGTAT"
+  k: 6
+  edit_dist: 140
+  stranded_edit_dist: 15
+  edit_site_min_cells: 3
+  nonbc_edit_dist: 1000
+  ploidy: 2
+  mrna_count_mode: "all"
+
+# Processing options
+processing:
+  n_cpus: 4  # Increase for faster processing
+  chunk_size_mb: 250
+  verbosity: 1  # 0=errors only, 1=info, 2=debug
+
+# Output options
+output:
+  outdir: "results/"
+  edit_site_rev_comp_filt: true
+  uncorrected_gene_count: false
+
+# Resume functionality (optional)
+resume:
+  enabled: false
+  checkpoint_dir: ".sheriff_checkpoints/"
+  checkpoint_interval: 5  # minutes
+
+# Logging (optional)
+logging:
+  file: "sheriff.log"
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "detailed"  # simple, detailed, json
+
+# Profiling (optional)
+profiling:
+  enabled: false
+  output: "sheriff_profile.json"
+  memory_tracking: true
