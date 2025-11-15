@@ -11,8 +11,8 @@ sys.path.insert(0, os.path.abspath('../..'))
 project = 'Sheriff'
 copyright = '2025, The Salk Institute for Biological Studies'
 author = 'Brad Balderson, Michael Lorenzini, Aaron Ho'
-release = '1.1.3'
-version = '1.1.3'
+release = '1.2.0'
+version = '1.2.0'
 
 # -- General configuration ---------------------------------------------------
 extensions = [

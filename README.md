@@ -96,6 +96,25 @@ To install from source:
     export CPPFLAGS="-I$CONDA_PREFIX/include"
     export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
 
+**Optional: Install Rust Acceleration (10-50x speedup, recommended for large datasets)**
+
+    # Install Rust toolchain (if not already installed)
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    source $HOME/.cargo/env
+
+    # Install maturin for building Rust-Python extensions
+    pip install maturin
+
+    # Build and install Rust acceleration
+    cd sheriff-rs
+    maturin develop --release
+    cd ..
+
+    # Sheriff will now automatically use Rust for BAM filtering (10-50x faster)
+    # Falls back to Python if Rust not available
+
+For benchmarking and performance details, see the [Rust Quick Start Guide](RUST_QUICKSTART.md).
+
 Usage
 -----
     sheriff --help
