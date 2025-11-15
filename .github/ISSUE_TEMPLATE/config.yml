@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Sheriff Documentation
+    url: https://sheriff.readthedocs.io/
+    about: Read the comprehensive Sheriff documentation
+  - name: Discussions
+    url: https://github.com/BradBalderson/Sheriff/discussions
+    about: Ask questions and discuss Sheriff with the community
+  - name: Citation Information
+    url: https://github.com/BradBalderson/Sheriff#citation
+    about: How to cite Sheriff in your publications

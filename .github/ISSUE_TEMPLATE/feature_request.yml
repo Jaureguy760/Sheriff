@@ -1,0 +1,114 @@
+name: Feature Request
+description: Suggest a new feature or enhancement
+title: "[FEATURE] "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature!
+
+        Please describe the feature you'd like to see in Sheriff.
+
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: Feature Description
+      description: A clear and concise description of the feature
+      placeholder: I would like Sheriff to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: What problem does this solve? How would you use it?
+      placeholder: |
+        This feature would help with...
+
+        Example workflow:
+        1. User wants to...
+        2. Feature enables...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: How do you envision this feature working?
+      placeholder: |
+        The feature could work by...
+
+        Example API:
+        ```python
+        sheriff.new_function(...)
+        ```
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Have you considered other approaches or workarounds?
+      placeholder: |
+        Alternative 1: ...
+        Alternative 2: ...
+        Current workaround: ...
+    validations:
+      required: false
+
+  - type: dropdown
+    id: feature-type
+    attributes:
+      label: Feature Type
+      description: What type of feature is this?
+      options:
+        - New algorithm/method
+        - Performance improvement
+        - New output format
+        - CLI enhancement
+        - API enhancement
+        - Documentation
+        - Integration (e.g., with other tools)
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to your workflow?
+      options:
+        - Critical (blocking my work)
+        - High (would significantly improve workflow)
+        - Medium (nice to have)
+        - Low (minor improvement)
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other relevant information, mockups, or references
+      placeholder: |
+        References:
+        - Similar feature in other tools: ...
+        - Related papers: ...
+        - Example data: ...
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues/PRs for similar features
+          required: true
+        - label: I am willing to help implement this feature
+          required: false
+        - label: I can provide example data for testing
+          required: false

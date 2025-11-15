@@ -1,0 +1,136 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+title: "[BUG] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this bug!
+
+        Please fill out this template to help us reproduce and fix the issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of the bug
+      placeholder: What happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step instructions to reproduce the bug
+      placeholder: |
+        1. Run Sheriff with command: `sheriff ...`
+        2. Using input files: ...
+        3. Error occurs at step: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: Expected Sheriff to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+      placeholder: Sheriff produced error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error Messages / Logs
+      description: Copy and paste any error messages or relevant log output
+      render: shell
+      placeholder: |
+        Paste error messages here...
+
+  - type: input
+    id: sheriff-version
+    attributes:
+      label: Sheriff Version
+      description: What version of Sheriff are you using?
+      placeholder: "e.g., 1.2.0 (run: sheriff --version)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: rust-available
+    attributes:
+      label: Rust Acceleration
+      description: Is Rust acceleration installed and available?
+      options:
+        - "Yes (Rust installed)"
+        - "No (Python only)"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python Version
+      description: What Python version are you using?
+      placeholder: "e.g., 3.11.5"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      description: What OS are you using?
+      options:
+        - Linux (Ubuntu/Debian)
+        - Linux (CentOS/RHEL/Rocky)
+        - Linux (Other)
+        - macOS (Intel)
+        - macOS (Apple Silicon)
+        - Windows
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: dataset-size
+    attributes:
+      label: Dataset Size
+      description: How many reads in your BAM file? (helps with reproduction)
+      placeholder: "e.g., 100M reads, 500-cell library"
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other relevant information
+      placeholder: |
+        - Related issues: #123
+        - Workaround found: ...
+        - Similar behavior observed: ...
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues to avoid duplicates
+          required: true
+        - label: I am using the latest version of Sheriff
+          required: false
+        - label: I have included error messages/logs
+          required: false
+        - label: I can provide a minimal reproducible example
+          required: false

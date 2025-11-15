@@ -1,0 +1,167 @@
+name: Performance Issue
+description: Report slow performance or request performance optimization
+title: "[PERFORMANCE] "
+labels: ["performance", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a performance issue!
+
+        Sheriff aims for high performance on large datasets. Help us understand the performance bottleneck.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Performance Issue Description
+      description: Describe the performance problem
+      placeholder: Sheriff is slow when...
+    validations:
+      required: true
+
+  - type: input
+    id: dataset-size
+    attributes:
+      label: Dataset Size
+      description: Number of reads in your BAM file
+      placeholder: "e.g., 937M reads, 10k cell library"
+    validations:
+      required: true
+
+  - type: input
+    id: current-time
+    attributes:
+      label: Current Runtime
+      description: How long does Sheriff currently take?
+      placeholder: "e.g., 9 hours, 45 minutes, etc."
+    validations:
+      required: true
+
+  - type: input
+    id: expected-time
+    attributes:
+      label: Expected Runtime
+      description: How fast do you expect it to be? (optional)
+      placeholder: "e.g., < 2 hours"
+
+  - type: dropdown
+    id: rust-available
+    attributes:
+      label: Rust Acceleration Status
+      description: Are you using Rust acceleration?
+      options:
+        - "Yes (Rust installed and working)"
+        - "No (Python only)"
+        - "Yes but not sure if it's being used"
+        - "Rust installation failed"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: bottleneck
+    attributes:
+      label: Performance Bottleneck
+      description: Which part of Sheriff is slow?
+      options:
+        - Overall pipeline (entire run)
+        - BAM filtering (initial barcode filtering)
+        - K-mer matching (T7 barcode detection)
+        - Edit site calling
+        - Gene counting
+        - UMI deduplication
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Sheriff Command
+      description: The exact command you ran
+      render: bash
+      placeholder: |
+        sheriff input.bam reference.fa barcodes.txt genes.gtf \
+          --cpu 8 \
+          --out results/
+    validations:
+      required: true
+
+  - type: textarea
+    id: system-specs
+    attributes:
+      label: System Specifications
+      description: Hardware and system info
+      placeholder: |
+        CPU: 16 cores (Intel Xeon)
+        RAM: 128 GB
+        Disk: SSD
+        OS: Ubuntu 22.04
+    validations:
+      required: true
+
+  - type: input
+    id: sheriff-version
+    attributes:
+      label: Sheriff Version
+      description: Sheriff version
+      placeholder: "e.g., 1.2.0"
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python Version
+      description: Python version
+      placeholder: "e.g., 3.11.5"
+    validations:
+      required: true
+
+  - type: textarea
+    id: profiling
+    attributes:
+      label: Profiling Data (if available)
+      description: Any profiling or timing information
+      render: shell
+      placeholder: |
+        If you have timing breakdown or profiling data, paste here...
+
+        Example:
+        BAM filtering: 180s
+        K-mer matching: 60s
+        Edit calling: 300s
+        Gene counting: 5000s
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround or Optimization Attempted
+      description: Have you tried any optimizations?
+      placeholder: |
+        - Increased --cpu parameter
+        - Installed Rust acceleration
+        - Used smaller chunks
+        - etc.
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other relevant information
+      placeholder: |
+        - Comparison to other tools: ...
+        - Expected performance based on: ...
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I am using the latest version of Sheriff
+          required: true
+        - label: I have Rust acceleration installed (if not, willing to try)
+          required: false
+        - label: I can provide profiling data if needed
+          required: false
+        - label: I am willing to test performance optimizations
+          required: false
