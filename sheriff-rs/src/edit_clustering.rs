@@ -12,6 +12,7 @@
 
 use bio::alignment::pairwise::*;
 use std::cmp::Ordering;
+use std::collections::HashSet;
 
 /// ReadEdit represents a single edit detected in a sequencing read
 ///
@@ -170,6 +171,23 @@ pub fn bio_edit_distance(
 }
 
 /// Reconstruct aligned sequences from alignment operations
+///
+/// This matches Python's pairwise2.align.localms output format:
+/// - Leading dashes for unaligned prefix of the OTHER sequence
+/// - Internal gaps from alignment operations
+/// - Trailing dashes for unaligned suffix of the OTHER sequence
+///
+/// Python example:
+/// seq1 = 'AGGGGCCCTTACCATACCCC' (len=20)
+/// seq2 = 'CGCCACTGGAGACTGGGTTAG' (len=21)
+/// Result:
+/// seqA: '---------AG---GGGCCCTTACCATACCCC'  (9 leading dashes)
+/// seqB: 'CGCCACTGGAGACTGGG---TTAG--------'  (8 trailing dashes)
+///
+/// If alignment.xstart = 9, alignment.ystart = 0:
+/// - seq2[0:9] appears first, with dashes in seqA
+/// - Then the aligned portion
+/// - Then remaining seq1, with dashes in seqB
 fn reconstruct_alignment(seq_a: &str, seq_b: &str, alignment: &bio::alignment::Alignment) -> (String, String) {
     let mut aligned_a = String::new();
     let mut aligned_b = String::new();
@@ -177,9 +195,32 @@ fn reconstruct_alignment(seq_a: &str, seq_b: &str, alignment: &bio::alignment::A
     let seq_a_bytes = seq_a.as_bytes();
     let seq_b_bytes = seq_b.as_bytes();
 
-    let mut i = alignment.ystart;
-    let mut j = alignment.xstart;
+    // Add leading padding for unaligned prefix
+    // In bio-rs aligner.local(x, y):
+    //   x = first arg (seq_a), y = second arg (seq_b)
+    //   xstart = position where alignment starts in seq_a
+    //   ystart = position where alignment starts in seq_b
 
+    // Safety check: ensure indices are within bounds
+    let xstart = alignment.xstart.min(seq_a_bytes.len());
+    let ystart = alignment.ystart.min(seq_b_bytes.len());
+
+    // If ystart > 0, seq_b has leading unaligned chars - add dashes to aligned_a
+    for idx in 0..ystart {
+        aligned_a.push('-');
+        aligned_b.push(seq_b_bytes[idx] as char);
+    }
+
+    // If xstart > 0, seq_a has leading unaligned chars - add dashes to aligned_b
+    for idx in 0..xstart {
+        aligned_a.push(seq_a_bytes[idx] as char);
+        aligned_b.push('-');
+    }
+
+    let mut i = xstart;  // Current position in seq_a
+    let mut j = ystart;  // Current position in seq_b
+
+    // Process alignment operations
     for op in &alignment.operations {
         match op {
             bio::alignment::AlignmentOperation::Match => {
@@ -216,6 +257,19 @@ fn reconstruct_alignment(seq_a: &str, seq_b: &str, alignment: &bio::alignment::A
         }
     }
 
+    // Add trailing padding for unaligned suffix
+    // Add remaining characters from seq_a and dashes to seq_b
+    for idx in i..seq_a_bytes.len() {
+        aligned_a.push(seq_a_bytes[idx] as char);
+        aligned_b.push('-');
+    }
+
+    // Add remaining characters from seq_b and dashes to seq_a
+    for idx in j..seq_b_bytes.len() {
+        aligned_b.push(seq_b_bytes[idx] as char);
+        aligned_a.push('-');
+    }
+
     (aligned_a, aligned_b)
 }
 
@@ -248,8 +302,9 @@ pub fn get_longest_edits(mut edits: Vec<Edit>) -> Vec<Edit> {
     // Sort by alt_seq length (ascending)
     edits.sort_by_key(|e| e.alt_seq.len());
 
-    let mut longest_edits: Vec<Edit> = Vec::new();
-    let mut sub_edits: Vec<Edit> = Vec::new();
+    // Use HashSet for O(1) membership checks instead of O(n) Vec::contains()
+    let mut longest_edits_set: HashSet<Edit> = HashSet::new();
+    let mut sub_edits_set: HashSet<Edit> = HashSet::new();
 
     for i in 0..edits.len() {
         let edit_1 = &edits[i];
@@ -260,11 +315,11 @@ pub fn get_longest_edits(mut edits: Vec<Edit>) -> Vec<Edit> {
             // Different orientation or position -> definitely different alleles
             if edit_1.forward != edit_2.forward || edit_1.ref_pos != edit_2.ref_pos {
                 // Add both as longest edits if not already sub-edits
-                if !sub_edits.contains(edit_1) && !longest_edits.contains(edit_1) {
-                    longest_edits.push(edit_1.clone());
+                if !sub_edits_set.contains(edit_1) {
+                    longest_edits_set.insert(edit_1.clone());
                 }
-                if !sub_edits.contains(edit_2) && !longest_edits.contains(edit_2) {
-                    longest_edits.push(edit_2.clone());
+                if !sub_edits_set.contains(edit_2) {
+                    longest_edits_set.insert(edit_2.clone());
                 }
                 continue;
             }
@@ -327,70 +382,53 @@ pub fn get_longest_edits(mut edits: Vec<Edit>) -> Vec<Edit> {
 
             // Determine if edits should be clustered together
             if dist_between_seqs <= 2 {
-                // Choose the longer edit (or better kmer match if same length)
-                let long_edit = if edit_1.alt_seq.len() != edit_2.alt_seq.len() {
-                    if edit_1.alt_seq.len() > edit_2.alt_seq.len() {
-                        edit_2.clone() // edit_1 is longer, so edit_2 is sub-edit
+                // Determine which is the sub-edit (shorter one, or fewer kmer matches if same length)
+                let subedit = if edit_1.alt_seq.len() != edit_2.alt_seq.len() {
+                    if edit_1.alt_seq.len() < edit_2.alt_seq.len() {
+                        edit_1
                     } else {
-                        edit_1.clone() // edit_2 is longer, so edit_1 is sub-edit
+                        edit_2
                     }
                 } else {
                     // Same length, choose based on kmer matches
                     if edit_1.kmer_matches.len() >= edit_2.kmer_matches.len() {
-                        edit_2.clone()
-                    } else {
-                        edit_1.clone()
-                    }
-                };
-
-                // Determine which is the sub-edit
-                let subedit = if edit_1.alt_seq.len() != edit_2.alt_seq.len() {
-                    if edit_1.alt_seq.len() > edit_2.alt_seq.len() {
-                        edit_2
-                    } else {
-                        edit_1
-                    }
-                } else {
-                    if edit_1.kmer_matches.len() >= edit_2.kmer_matches.len() {
                         edit_2
                     } else {
                         edit_1
                     }
                 };
 
-                // Remove subedit from longest_edits if present
-                longest_edits.retain(|e| e != subedit);
+                // Remove subedit from longest_edits if present (O(1) operation)
+                longest_edits_set.remove(subedit);
 
-                // Add subedit to sub_edits list
-                if !sub_edits.contains(subedit) {
-                    sub_edits.push(subedit.clone());
-                }
+                // Add subedit to sub_edits set (O(1) operation)
+                sub_edits_set.insert(subedit.clone());
 
                 // Add the long_edit to longest_edits if not already a subedit
                 let actual_long_edit = if edit_1 == subedit { edit_2 } else { edit_1 };
-                if !sub_edits.contains(actual_long_edit) && !longest_edits.contains(actual_long_edit) {
-                    longest_edits.push(actual_long_edit.clone());
+                if !sub_edits_set.contains(actual_long_edit) {
+                    longest_edits_set.insert(actual_long_edit.clone());
                 }
             } else {
                 // They are different - add both as longest edits if not sub-edits
-                if !sub_edits.contains(edit_1) && !longest_edits.contains(edit_1) {
-                    longest_edits.push(edit_1.clone());
+                if !sub_edits_set.contains(edit_1) {
+                    longest_edits_set.insert(edit_1.clone());
                 }
-                if !sub_edits.contains(edit_2) && !longest_edits.contains(edit_2) {
-                    longest_edits.push(edit_2.clone());
+                if !sub_edits_set.contains(edit_2) {
+                    longest_edits_set.insert(edit_2.clone());
                 }
             }
         }
     }
 
-    // Deduplicate and return
+    // Convert HashSet to sorted Vec for deterministic output
+    let mut longest_edits: Vec<Edit> = longest_edits_set.into_iter().collect();
     longest_edits.sort_by(|a, b| {
         match a.chrom.cmp(&b.chrom) {
             Ordering::Equal => a.ref_pos.cmp(&b.ref_pos),
             other => other,
         }
     });
-    longest_edits.dedup();
 
     longest_edits
 }

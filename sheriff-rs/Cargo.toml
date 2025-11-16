@@ -33,6 +33,10 @@ python = ["pyo3"]
 name = "sheriff-rs"
 path = "src/main.rs"
 
+[[bin]]
+name = "test_substring"
+path = "src/test_substring.rs"
+
 [[bench]]
 name = "bam_benchmark"
 harness = false
