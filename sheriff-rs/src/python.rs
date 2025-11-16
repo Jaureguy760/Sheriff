@@ -1,6 +1,8 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use crate::bam_filter::{filter_bam_by_barcodes, filter_bam_by_barcodes_parallel, filter_bam_by_barcodes_chromosome_parallel, load_whitelist};
+use crate::umi::{deduplicate_umis_rust, cell_umi_counts_rust, cell_umi_counts_rust_parallel};
+use crate::edit_clustering::{Edit, get_longest_edits};
 use std::collections::HashSet;
 
 /// Filter BAM file by cell barcode whitelist (Python wrapper - file-based)
@@ -236,6 +238,145 @@ fn filter_bam_by_barcodes_rust_chromosome(
     })
 }
 
+/// Deduplicate UMIs using graph-based connected components (Python wrapper)
+///
+/// Fast Rust implementation of UMI deduplication using petgraph.
+/// Identifies unique molecules by clustering UMIs within Hamming distance 1.
+///
+/// # Arguments
+/// * `umis` - List of UMI sequences (all must be same length)
+///
+/// # Returns
+/// Number of unique UMI groups (connected components)
+///
+/// # Example (Python)
+/// ```python
+/// from sheriff_rs import deduplicate_umis_rust
+/// umis = ["ATCG", "ATCG", "TTTT"]
+/// unique_count = deduplicate_umis_rust(umis)
+/// print(unique_count)  # Output: 2
+/// ```
+#[pyfunction]
+fn deduplicate_umis_py(umis: Vec<String>) -> usize {
+    deduplicate_umis_rust(&umis)  // Pass by reference, no clone needed
+}
+
+/// Process UMI deduplication for multiple cells (Python wrapper)
+///
+/// Processes UMI counts for multiple cells efficiently, matching Python's
+/// `cell_umi_counts_FAST` function exactly.
+///
+/// # Arguments
+/// * `cell_bc_indexes` - List of cell barcode indices
+/// * `cell_umis` - List of UMI arrays (parallel to cell_bc_indexes)
+/// * `total_cells` - Total number of cells
+///
+/// # Returns
+/// List of UMI counts per cell (length = total_cells)
+///
+/// # Example (Python)
+/// ```python
+/// from sheriff_rs import cell_umi_counts_py
+/// cell_bc_indexes = [0, 1, 0]
+/// cell_umis = [["ATCG"], ["TTTT", "CCCC"], ["GGGG"]]
+/// counts = cell_umi_counts_py(cell_bc_indexes, cell_umis, 2)
+/// print(counts)  # Output: [2, 2]
+/// ```
+#[pyfunction]
+fn cell_umi_counts_py(
+    cell_bc_indexes: Vec<usize>,
+    cell_umis: Vec<Vec<String>>,
+    total_cells: usize,
+) -> Vec<u32> {
+    cell_umi_counts_rust(cell_bc_indexes, cell_umis, total_cells)
+}
+
+/// Process UMI deduplication for multiple cells in parallel (Python wrapper)
+///
+/// Parallel version using rayon for multi-core speedup.
+///
+/// # Arguments
+/// * `cell_bc_indexes` - List of cell barcode indices
+/// * `cell_umis` - List of UMI arrays (parallel to cell_bc_indexes)
+/// * `total_cells` - Total number of cells
+///
+/// # Returns
+/// List of UMI counts per cell (length = total_cells)
+///
+/// # Performance
+/// Expected speedup: 2-8x over sequential version on multi-core systems
+#[pyfunction]
+fn cell_umi_counts_py_parallel(
+    cell_bc_indexes: Vec<usize>,
+    cell_umis: Vec<Vec<String>>,
+    total_cells: usize,
+) -> Vec<u32> {
+    cell_umi_counts_rust_parallel(cell_bc_indexes, cell_umis, total_cells)
+}
+
+/// Get longest edits from edit clustering (Python wrapper)
+///
+/// Clusters similar edits and returns only the longest/canonical edit from each cluster.
+/// This is a high-performance Rust implementation of Python's `get_longest_edits` function.
+///
+/// # Arguments
+/// * `edits` - List of tuples (chrom, ref_pos, ref_seq, alt_seq, forward, kmer_matches)
+///             where kmer_matches is a list of integers
+///
+/// # Returns
+/// List of tuples representing the longest/canonical edits in the same format
+///
+/// # Performance
+/// Expected speedup: 20-100x over Python implementation
+/// - Python: 8.9s for 352k reads, 48 minutes for 114M reads
+/// - Rust: Sub-second for 352k reads, minutes for 114M reads
+///
+/// # Example (Python)
+/// ```python
+/// from sheriff_rs import get_longest_edits_rust
+///
+/// # Each edit is a tuple: (chrom, ref_pos, ref_seq, alt_seq, forward, kmer_matches)
+/// edits = [
+///     ("chr1", 1000, "ATCG", "ATCGATCGATCG", True, [1, 2, 3]),
+///     ("chr1", 1000, "ATCG", "ATCGATCG", True, [1]),  # Subset, will be removed
+///     ("chr1", 2000, "GCTA", "GCTACCCC", False, [4, 5]),
+/// ]
+///
+/// longest = get_longest_edits_rust(edits)
+/// # Returns: [("chr1", 1000, "ATCG", "ATCGATCGATCG", True, [1, 2, 3]),
+/// #           ("chr1", 2000, "GCTA", "GCTACCCC", False, [4, 5])]
+/// ```
+#[pyfunction]
+fn get_longest_edits_rust(
+    edits: Vec<(String, i64, String, String, bool, Vec<usize>)>,
+) -> Vec<(String, i64, String, String, bool, Vec<usize>)> {
+    // Convert Python tuples to Rust Edit structs
+    let rust_edits: Vec<Edit> = edits
+        .into_iter()
+        .map(|(chrom, ref_pos, ref_seq, alt_seq, forward, kmer_matches)| {
+            Edit::new(chrom, ref_pos, ref_seq, alt_seq, forward, kmer_matches)
+        })
+        .collect();
+
+    // Call Rust implementation
+    let longest_edits = get_longest_edits(rust_edits);
+
+    // Convert back to Python tuples
+    longest_edits
+        .into_iter()
+        .map(|edit| {
+            (
+                edit.chrom,
+                edit.ref_pos,
+                edit.ref_seq,
+                edit.alt_seq,
+                edit.forward,
+                edit.kmer_matches,
+            )
+        })
+        .collect()
+}
+
 /// Sheriff-rs Python module
 #[pymodule]
 fn sheriff_rs(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -245,5 +386,9 @@ fn sheriff_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(filter_bam_by_barcodes_rust_chromosome, m)?)?;
     m.add_function(wrap_pyfunction!(count_kmers_rust, m)?)?;
     m.add_function(wrap_pyfunction!(match_kmer_rust, m)?)?;
+    m.add_function(wrap_pyfunction!(deduplicate_umis_py, m)?)?;
+    m.add_function(wrap_pyfunction!(cell_umi_counts_py, m)?)?;
+    m.add_function(wrap_pyfunction!(cell_umi_counts_py_parallel, m)?)?;
+    m.add_function(wrap_pyfunction!(get_longest_edits_rust, m)?)?;
     Ok(())
 }

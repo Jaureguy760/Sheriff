@@ -32,10 +32,17 @@ pub fn filter_bam_by_barcodes(
     let mut bam = bam::Reader::from_path(input_path)
         .context("Failed to open input BAM")?;
 
+    // Enable multi-threaded BGZF decompression (2-5x faster I/O)
+    // Uses 4 threads by default for parallel block decompression
+    bam.set_threads(4).ok();  // Ignore errors if threading not supported
+
     // Create output BAM with same header
     let header = bam::Header::from_template(bam.header());
     let mut out = bam::Writer::from_path(output_path, &header, bam::Format::Bam)
         .context("Failed to create output BAM")?;
+
+    // Enable multi-threaded BGZF compression for output
+    out.set_threads(4).ok();
 
     let mut stats = FilterResult {
         reads_processed: 0,
@@ -85,6 +92,9 @@ pub fn filter_bam_by_barcodes_parallel(
     // Open input BAM
     let mut bam = bam::Reader::from_path(input_path)
         .context("Failed to open input BAM")?;
+
+    // Enable multi-threaded BGZF decompression (2-5x faster I/O)
+    bam.set_threads(4).ok();
 
     // Store header for output creation
     let header = bam::Header::from_template(bam.header());
@@ -147,14 +157,6 @@ pub fn filter_bam_by_barcodes_chromosome_parallel(
     whitelist: &HashSet<String>,
     num_threads: Option<usize>,
 ) -> Result<FilterResult> {
-    // Set thread pool size
-    if let Some(threads) = num_threads {
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(threads)
-            .build_global()
-            .context("Failed to set thread pool size")?;
-    }
-
     // Open BAM to read header
     let bam = bam::Reader::from_path(input_path)
         .context("Failed to open input BAM")?;
@@ -177,29 +179,44 @@ pub fn filter_bam_by_barcodes_chromosome_parallel(
     fs::create_dir_all(&temp_dir)
         .context("Failed to create temporary directory")?;
 
-    // Process each chromosome in parallel
-    let results: Vec<(String, FilterResult)> = ref_names
-        .par_iter()
-        .map(|chr_name| {
-            let temp_bam = format!("{}/{}.bam", temp_dir, chr_name);
-            let result = filter_chromosome(
-                input_path,
-                &temp_bam,
-                chr_name,
-                whitelist,
-            );
-            (temp_bam, result)
-        })
-        .filter_map(|(temp_bam, result)| {
-            match result {
-                Ok(stats) => Some((temp_bam, stats)),
-                Err(e) => {
-                    eprintln!("Warning: Failed to process chromosome: {}", e);
-                    None
+    // Create a custom thread pool or use default
+    let process_chromosomes = || {
+        ref_names
+            .par_iter()
+            .map(|chr_name| {
+                let temp_bam = format!("{}/{}.bam", temp_dir, chr_name);
+                let result = filter_chromosome(
+                    input_path,
+                    &temp_bam,
+                    chr_name,
+                    whitelist,
+                );
+                (temp_bam, result)
+            })
+            .filter_map(|(temp_bam, result)| {
+                match result {
+                    Ok(stats) => Some((temp_bam, stats)),
+                    Err(e) => {
+                        eprintln!("Warning: Failed to process chromosome: {}", e);
+                        None
+                    }
                 }
-            }
-        })
-        .collect();
+            })
+            .collect()
+    };
+
+    // Process each chromosome in parallel using custom or default pool
+    let results: Vec<(String, FilterResult)> = if let Some(threads) = num_threads {
+        // Use a custom local thread pool to avoid global pool conflicts
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .context("Failed to create thread pool")?
+            .install(process_chromosomes)
+    } else {
+        // Use default global pool
+        process_chromosomes()
+    };
 
     // Merge all chromosome BAMs
     let total_stats = merge_bam_files(&results, output_path, &header)?;

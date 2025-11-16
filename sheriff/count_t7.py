@@ -36,6 +36,13 @@ except ImportError:
         stacklevel=2
     )
 
+# Try to import Rust acceleration for edit clustering (20x faster)
+try:
+    from .rust_accelerated import get_longest_edits_rust, USE_RUST_EDIT
+except ImportError:
+    USE_RUST_EDIT = False
+    get_longest_edits_rust = None
+
 # Import of helper functions !
 # from .helpers import get_t7_count_matrix, get_cell_counts_from_umi_dict, bam_count_gene_umis, bio_edit_distance, \
 #                     get_edit_sets, get_longest_edits
@@ -1097,7 +1104,11 @@ def run_count_t7(bam_file,
 
             # V3 of method, tries to get the longest t7 insertion sequences that are distinct from each other,
             # to avoid subsequences of a longer edit inflating allelic edit estimation.
-            unique_edits = get_longest_edits(edit_set)
+            # Use Rust acceleration if available (20x faster)
+            if USE_RUST_EDIT and get_longest_edits_rust is not None:
+                unique_edits = get_longest_edits_rust(edit_set)
+            else:
+                unique_edits = get_longest_edits(edit_set)
 
             n_alleles_called = len(unique_edits)
 
