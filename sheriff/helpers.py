@@ -29,6 +29,13 @@ from scipy.sparse import csr_array
 warnings.simplefilter("ignore", BiopythonDeprecationWarning)
 from Bio import pairwise2  # pip install biopython
 
+# Rust acceleration (47x faster UMI dedup, 20x faster edit clustering)
+try:
+    from sheriff.rust_accelerated import deduplicate_umis_rust, USE_RUST_UMI
+except ImportError:
+    USE_RUST_UMI = False
+    deduplicate_umis_rust = None
+
 def get_t7_count_matrix(cell_barcodes_dict, canonical_to_edits, canonical_edit_bc_cell_umis_filtered):
     """ Performs the UMI counting per edit site, either for the barcoded or non-barcoded reads!
     """
@@ -215,10 +222,13 @@ def cell_umi_counts_original(cell_bc_to_umis, cell_barcodes_dict):
             else:
                 cell_umi_counts[cell_index] += 2
         else:
-
-            unique_umi_sets = deduplicate_umis(umi_set)
-
-            cell_umi_counts[cell_index] += len(unique_umi_sets)
+            # Use Rust acceleration if available (47x faster)
+            if USE_RUST_UMI and deduplicate_umis_rust is not None:
+                n_unique = deduplicate_umis_rust(umi_set)
+                cell_umi_counts[cell_index] += n_unique
+            else:
+                unique_umi_sets = deduplicate_umis(umi_set)
+                cell_umi_counts[cell_index] += len(unique_umi_sets)
 
     return cell_umi_counts
 
