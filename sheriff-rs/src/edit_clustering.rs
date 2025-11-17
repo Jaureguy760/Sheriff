@@ -325,8 +325,8 @@ pub fn get_longest_edits(mut edits: Vec<Edit>) -> Vec<Edit> {
         for j in (i + 1)..edits.len() {
             let edit_2 = &edits[j];
 
-            // Different orientation or position -> definitely different alleles
-            if edit_1.forward != edit_2.forward || edit_1.ref_pos != edit_2.ref_pos {
+            // Different chromosome, orientation, or position -> definitely different alleles
+            if edit_1.chrom != edit_2.chrom || edit_1.forward != edit_2.forward || edit_1.ref_pos != edit_2.ref_pos {
                 // Add both as longest edits if not already sub-edits
                 if !sub_edits_set.contains(edit_1) {
                     longest_edits_set.insert(edit_1.clone());
@@ -429,6 +429,15 @@ pub fn get_longest_edits(mut edits: Vec<Edit>) -> Vec<Edit> {
                     longest_edits_set.insert(edit_2.clone());
                 }
             }
+        }
+    }
+
+    // FIX: After nested loops, add any remaining edits that weren't compared or added
+    // This ensures edits that were never part of a comparison (e.g., last edit, or
+    // edits on unique chromosomes) are included in the output if they're not sub-edits
+    for edit in &edits {
+        if !sub_edits_set.contains(edit) && !longest_edits_set.contains(edit) {
+            longest_edits_set.insert(edit.clone());
         }
     }
 
