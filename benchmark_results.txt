@@ -1,0 +1,9 @@
+EDIT CLUSTERING BENCHMARK RESULTS
+======================================================================
+
+Input edits: 50
+Output edits: 50
+Mean time: 0.28 ms
+Std dev: 0.02 ms
+Comparisons: 1225
+Time per comparison: 0.23 µs
