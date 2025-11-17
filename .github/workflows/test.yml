@@ -1,0 +1,119 @@
+name: Sheriff Tests with Real Data
+
+on:
+  push:
+    branches: [main, claude/*, rust-optimization-upgrade]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y samtools bcftools bedtools
+
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+
+    - name: Cache Rust dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          sheriff-rs/target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install Python dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -e .
+        pip install maturin pytest pytest-cov
+
+    - name: Build Rust module
+      run: |
+        cd sheriff-rs
+        maturin build --release --features python
+        pip install target/wheels/*.whl
+
+    - name: Verify test data exists
+      run: |
+        echo "Checking test data files..."
+        ls -lh test_data/test_200kb.bam
+        ls -lh test_data/barcodes.txt
+        ls -lh test_data/edit_sites.txt
+        echo "Test data found! ✅"
+
+    - name: Run CI validation with real genomic data
+      run: |
+        echo "Running Rust function validation on 352k reads..."
+        python test_data/ci_validation.py
+
+    - name: Run integration smoke tests
+      run: |
+        echo "Running Priority 3 integration tests..."
+        python test_integration_smoke.py
+
+    - name: Run full integration tests
+      run: |
+        echo "Running full integration validation..."
+        python test_priority3_integration.py
+
+    - name: Verify Rust acceleration works
+      run: |
+        python -c "
+import sheriff_rs
+print('✅ Rust module imported successfully')
+print(f'Available functions: {[x for x in dir(sheriff_rs) if not x.startswith(\"_\")]}')
+
+# Quick smoke test
+umis = ['ATCG', 'ATCG', 'TTTT']
+result = sheriff_rs.deduplicate_umis_py(umis)
+print(f'✅ UMI dedup test: {len(umis)} UMIs → {result} unique groups')
+
+# K-mer test
+seq = 'GGGAGAGTAT' * 10
+kmers = sheriff_rs.count_kmers_rust(seq, 6)
+print(f'✅ K-mer counting: {len(seq)}bp sequence → {sum(kmers)} 6-mers counted')
+
+print('✅ All Rust functions working!')
+        "
+
+    - name: Run pytest (if additional tests exist)
+      run: |
+        if [ -d "tests" ]; then
+          pytest tests/ -v
+        else
+          echo "No pytest tests directory found, skipping"
+        fi
+
+    - name: Summary
+      if: always()
+      run: |
+        echo "================================"
+        echo "Sheriff Test Summary"
+        echo "================================"
+        echo "Python: ${{ matrix.python-version }}"
+        echo "Rust: stable"
+        echo "Test data: 352,535 reads from test_200kb.bam"
+        echo "Barcodes: 583 cells tested"
+        echo "================================"

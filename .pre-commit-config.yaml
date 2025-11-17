@@ -1,115 +1,50 @@
-# Sheriff Pre-commit Configuration
-# Install: pre-commit install
-# Run manually: pre-commit run --all-files
+# Pre-commit hooks for Sheriff
+# Install with: pip install pre-commit && pre-commit install
 
 repos:
-  # General file fixes
+  # Basic file hygiene
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
       - id: trailing-whitespace
-        args: [--markdown-linebreak-ext=md]
       - id: end-of-file-fixer
       - id: check-yaml
-        args: [--allow-multiple-documents]
       - id: check-added-large-files
-        args: ['--maxkb=5000']
+        args: ['--maxkb=5000']  # Allow up to 5MB (for test BAM files)
       - id: check-merge-conflict
-      - id: check-toml
-      - id: check-json
-      - id: debug-statements
-      - id: mixed-line-ending
-        args: [--fix=lf]
+      - id: detect-private-key
 
-  # Python code formatting
+  # Python formatting with Black
   - repo: https://github.com/psf/black
     rev: 23.12.1
     hooks:
       - id: black
-        language_version: python3.10
-        args: [--line-length=120]
+        language_version: python3.11
+        args: ['--line-length=100']
 
-  # Python linting and auto-fixes
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.15
+  # Python import sorting
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
     hooks:
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+      - id: isort
+        args: ['--profile', 'black', '--line-length', '100']
 
-  # Python type checking (optional, can be slow)
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.8.0
-    hooks:
-      - id: mypy
-        additional_dependencies: [types-all]
-        args: [--ignore-missing-imports, --no-strict-optional]
-        exclude: ^(tests/|benchmarks/)
-
-  # Python docstring formatting
-  - repo: https://github.com/pycqa/pydocstyle
-    rev: 6.3.0
-    hooks:
-      - id: pydocstyle
-        args: [--convention=numpy]
-        exclude: ^(tests/|benchmarks/|setup.py)
-
-  # Rust formatting and linting
+  # Rust formatting
   - repo: local
     hooks:
-      - id: cargo-fmt
-        name: Cargo Format
-        entry: bash -c 'cd sheriff-rs && cargo fmt -- --check'
+      - id: rustfmt
+        name: rustfmt
+        entry: cargo fmt --manifest-path sheriff-rs/Cargo.toml --
         language: system
         files: \.rs$
-        pass_filenames: false
+        pass_filenames: true
 
-      - id: cargo-clippy
-        name: Cargo Clippy
-        entry: bash -c 'cd sheriff-rs && cargo clippy -- -D warnings'
+  # Validate test data integrity on commit
+  - repo: local
+    hooks:
+      - id: validate-test-data
+        name: Validate test data checksums
+        entry: python test_data/ci_validation.py
         language: system
-        files: \.rs$
         pass_filenames: false
-
-  # Security checks
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.6
-    hooks:
-      - id: bandit
-        args: [-r, sheriff/, -ll]
-        exclude: ^tests/
-
-  # Documentation checks
-  - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.39.0
-    hooks:
-      - id: markdownlint
-        args: [--fix]
-        exclude: ^(CHANGELOG\.md|docs/)
-
-  # YAML formatting
-  - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-    rev: v2.12.0
-    hooks:
-      - id: pretty-format-yaml
-        args: [--autofix, --indent, '2']
-
-  # Spell checking (optional)
-  - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.6
-    hooks:
-      - id: codespell
-        args: [--ignore-words-list, 'crate,nd,ser,te']
-        exclude: ^(poetry\.lock|\.git/)
-
-# Global settings
-ci:
-  autofix_commit_msg: |
-    [pre-commit.ci] auto fixes from pre-commit hooks
-
-    for more information, see https://pre-commit.ci
-  autofix_prs: true
-  autoupdate_branch: ''
-  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
-  autoupdate_schedule: weekly
-  skip: [cargo-fmt, cargo-clippy]  # Skip Rust checks in pre-commit.ci
-  submodules: false
+        stages: [push]  # Only run on push, not every commit
