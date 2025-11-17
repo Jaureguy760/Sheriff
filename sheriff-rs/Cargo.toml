@@ -7,15 +7,15 @@ description = "High-performance Rust acceleration for Sheriff bioinformatics pip
 license = "BSD-3-Clause"
 
 [dependencies]
-rust-htslib = "0.46"        # BAM/SAM parsing (HTSlib wrapper)
+rust-htslib = "0.46"        # BAM/SAM parsing (stays at 0.46 - newer versions need libclang)
 anyhow = "1.0"              # Error handling
-rayon = "1.8"               # Parallelism
-ahash = "0.8"               # Fast hashing
+rayon = "1.11"              # Parallelism - UPDATED from 1.8
+ahash = "0.8"               # Fast hashing (NOW USED!)
 clap = { version = "4.4", features = ["derive"] }
 serde_json = "1.0"
-pyo3 = { version = "0.20", features = ["extension-module"], optional = true }
+pyo3 = { version = "0.21", features = ["extension-module"], optional = true }  # UPDATED from 0.20
 petgraph = "0.6"            # Graph algorithms for UMI deduplication
-bio = "1.6"                 # Sequence alignment (rust-bio)
+bio = "2.0"                 # Sequence alignment (rust-bio) - UPDATED from 1.6
 regex = "1.10"              # Pattern matching for homopolymer correction
 
 [dev-dependencies]
@@ -33,9 +33,7 @@ python = ["pyo3"]
 name = "sheriff-rs"
 path = "src/main.rs"
 
-[[bin]]
-name = "test_substring"
-path = "src/test_substring.rs"
+# Removed test_substring binary (file doesn't exist)
 
 [[bench]]
 name = "bam_benchmark"

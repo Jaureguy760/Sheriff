@@ -1,0 +1,21 @@
+{
+  "_comment": "MD5 checksums for Sheriff test data validation",
+  "_generated_by": "generate_checksums.py",
+  "test_files": {
+    "test_200kb.bam": "d6f6501895d53c9ef5d9845cf854714d",
+    "test_200kb.bam.bai": "f1370f30be9b5ea64a91ed884c31dfb0",
+    "barcodes.txt": "478d09b5646d27d9e754cd0808622c87",
+    "edit_sites.txt": "080071d6160224bd34ec319eeb6c98e4",
+    "blacklist.bed": "6a9230667e7b1286a98e86937f6ed76f",
+    "blacklist_seqs.txt": "ff3dffed6a0d0567a3e268b64cd8cddd"
+  },
+  "single_chrom_files": {
+    "_comment": "Single-chromosome test (chr19) - complete with reference",
+    "test_chr19.bam": "4feec0ac4b8707fcd64744f4386be1a0",
+    "chr19.fa.gz": "ca4f1a9927913fe5a62585a492d13c1a",
+    "chr19.gtf.gz": "a77168a66e7fadf40bcfa171dbd6c537",
+    "barcodes_chr19.txt": "ad89c4d2b2e5c78e0e213f71b693f641",
+    "edit_sites_chr19.txt": "8de1610a3f293815e9281275acda7426"
+  },
+  "expected_outputs": {}
+}

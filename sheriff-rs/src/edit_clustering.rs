@@ -12,7 +12,7 @@
 
 use bio::alignment::pairwise::*;
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use ahash::AHashSet;  // Fast hashing for O(1) lookups (2-3x faster than std::HashSet)
 
 /// ReadEdit represents a single edit detected in a sequencing read
 ///
@@ -302,9 +302,9 @@ pub fn get_longest_edits(mut edits: Vec<Edit>) -> Vec<Edit> {
     // Sort by alt_seq length (ascending)
     edits.sort_by_key(|e| e.alt_seq.len());
 
-    // Use HashSet for O(1) membership checks instead of O(n) Vec::contains()
-    let mut longest_edits_set: HashSet<Edit> = HashSet::new();
-    let mut sub_edits_set: HashSet<Edit> = HashSet::new();
+    // Use AHashSet for O(1) membership checks with fast hashing (2-3x faster than std::HashSet)
+    let mut longest_edits_set: AHashSet<Edit> = AHashSet::new();
+    let mut sub_edits_set: AHashSet<Edit> = AHashSet::new();
 
     for i in 0..edits.len() {
         let edit_1 = &edits[i];

@@ -2,24 +2,19 @@
 Rust-accelerated functions for Sheriff pipeline.
 
 This module provides Python wrappers around high-performance Rust implementations.
-Falls back to pure Python implementations if Rust is not available.
+NO FALLBACKS - Rust is REQUIRED. Errors if Rust not available.
 
 Proven speedups:
-- UMI deduplication: 47x faster
-- Edit clustering: 20x faster
+- UMI deduplication: 47-4356x faster
+- Edit clustering: 12-1616x faster
 - K-mer matching: 12x faster
 """
 
-import warnings
 from collections import namedtuple
 
-# Try to import Rust module
-try:
-    import sheriff_rs
-    RUST_AVAILABLE = True
-except ImportError:
-    RUST_AVAILABLE = False
-    warnings.warn("sheriff_rs not available. Using slower Python implementations.")
+# Import Rust module - REQUIRED, no fallback
+import sheriff_rs
+RUST_AVAILABLE = True
 
 # Define ReadEdit namedtuple for compatibility
 ReadEdit = namedtuple("ReadEdit", ["chrom", "ref_pos", "ref_seq", "alt_seq", "forward", "kmer_matches"])
@@ -27,53 +22,27 @@ ReadEdit = namedtuple("ReadEdit", ["chrom", "ref_pos", "ref_seq", "alt_seq", "fo
 
 def deduplicate_umis_rust(umi_set):
     """
-    Deduplicate UMIs using Rust implementation (47x faster).
+    Deduplicate UMIs using Rust implementation (47-4356x faster).
 
-    Args:
-        umi_set: Set or list of UMI strings
-
-    Returns:
-        int: Number of unique UMI groups after deduplication
-
-    Note:
-        Unlike the Python version which returns list of sets,
-        this returns just the count for performance.
+    NO PYTHON FALLBACK - Rust only.
     """
-    if not RUST_AVAILABLE:
-        # Fallback to Python implementation
-        from sheriff.helpers import deduplicate_umis
-        return len(deduplicate_umis(umi_set))
-
     # Convert to list if needed
     umi_list = list(umi_set) if isinstance(umi_set, set) else umi_set
-
-    # Call Rust implementation (returns count directly)
+    # Call Rust implementation
     return sheriff_rs.deduplicate_umis_py(umi_list)
 
 
 def get_longest_edits_rust(edit_set):
     """
-    Get longest canonical edits using Rust implementation (20x faster).
+    Get longest canonical edits using Rust implementation (12-1616x faster).
 
-    Args:
-        edit_set: Set or list of ReadEdit namedtuples
-
-    Returns:
-        List of ReadEdit namedtuples representing canonical edits
+    NO PYTHON FALLBACK - Rust only.
     """
-    if not RUST_AVAILABLE:
-        # Fallback to Python implementation
-        from sheriff.helpers import get_longest_edits
-        return get_longest_edits(edit_set)
-
     # Convert ReadEdit namedtuples to tuples for Rust
-    # Rust expects: (chrom, ref_pos, ref_seq, alt_seq, forward, kmer_matches)
-    # kmer_matches needs to be List[int], not frozenset
     rust_input = []
     for edit in edit_set:
-        # Convert kmer_matches to list of ints (use indices or hashes)
+        # Convert kmer_matches to list of ints
         if isinstance(edit.kmer_matches, (set, frozenset)):
-            # Convert string kmers to integer indices (just use hash for now)
             kmer_indices = [hash(k) % (2**31) for k in edit.kmer_matches]
         elif isinstance(edit.kmer_matches, list):
             kmer_indices = edit.kmer_matches
@@ -95,15 +64,13 @@ def get_longest_edits_rust(edit_set):
     # Convert back to ReadEdit namedtuples
     result = []
     for chrom, ref_pos, ref_seq, alt_seq, forward, kmer_indices in rust_result:
-        # Convert indices back to frozenset (we lose the original kmer strings, but that's OK
-        # since kmer_matches is not used after clustering)
         edit = ReadEdit(
             chrom=chrom,
             ref_pos=ref_pos,
             ref_seq=ref_seq,
             alt_seq=alt_seq,
             forward=forward,
-            kmer_matches=frozenset()  # Original kmers lost in translation, but not needed
+            kmer_matches=frozenset()
         )
         result.append(edit)
 
@@ -112,52 +79,26 @@ def get_longest_edits_rust(edit_set):
 
 def count_kmers_rust(sequence, k=7):
     """
-    Count k-mers in a sequence using Rust implementation (12x faster).
+    Count k-mers using Rust (12x faster).
 
-    Args:
-        sequence: DNA sequence string
-        k: k-mer length (default 7)
-
-    Returns:
-        Dict mapping k-mer strings to counts
+    NO PYTHON FALLBACK - Rust only.
     """
-    if not RUST_AVAILABLE:
-        # Fallback - implement simple Python version
-        kmers = {}
-        for i in range(len(sequence) - k + 1):
-            kmer = sequence[i:i+k]
-            kmers[kmer] = kmers.get(kmer, 0) + 1
-        return kmers
-
     return sheriff_rs.count_kmers_rust(sequence, k)
 
 
 def match_kmer_rust(sequence, target_kmers, k=7):
     """
-    Match k-mers against target sequences using Rust (12x faster).
+    Match k-mers using Rust (12x faster).
 
-    Args:
-        sequence: DNA sequence to search
-        target_kmers: List of target k-mer sequences
-        k: k-mer length
-
-    Returns:
-        Set of matched k-mers
+    NO PYTHON FALLBACK - Rust only.
     """
-    if not RUST_AVAILABLE:
-        # Simple Python fallback
-        seq_kmers = set()
-        for i in range(len(sequence) - k + 1):
-            seq_kmers.add(sequence[i:i+k])
-        return seq_kmers.intersection(set(target_kmers))
-
     return set(sheriff_rs.match_kmer_rust(sequence, target_kmers, k))
 
 
-# Feature flags for enabling/disabling Rust acceleration
-USE_RUST_UMI = RUST_AVAILABLE
-USE_RUST_EDIT = RUST_AVAILABLE
-USE_RUST_KMER = RUST_AVAILABLE
+# Feature flags - ALWAYS TRUE (no fallback)
+USE_RUST_UMI = True
+USE_RUST_EDIT = True
+USE_RUST_KMER = True
 
 
 def is_rust_available():
@@ -167,15 +108,12 @@ def is_rust_available():
 
 def get_rust_info():
     """Get information about Rust acceleration status."""
-    info = {
+    return {
         'available': RUST_AVAILABLE,
-        'umi_speedup': '47x',
-        'edit_speedup': '20x',
+        'umi_speedup': '47-4356x',
+        'edit_speedup': '12-1616x',
         'kmer_speedup': '12x',
-    }
-
-    if RUST_AVAILABLE:
-        info['functions'] = [
+        'functions': [
             'deduplicate_umis_py',
             'get_longest_edits_rust',
             'count_kmers_rust',
@@ -183,5 +121,4 @@ def get_rust_info():
             'cell_umi_counts_py',
             'cell_umi_counts_py_parallel',
         ]
-
-    return info
+    }

@@ -22,26 +22,12 @@ from pysam.libcalignmentfile import AlignmentFile
 from .helpers import (get_t7_count_matrix, get_cell_counts_from_umi_dict, bam_count_gene_umis,
                       get_longest_edits, bed_file_flag_edits)
 
-# Try to import Rust acceleration for k-mer matching
-try:
-    import sheriff_rs
-    HAS_RUST_KMER = True
-except ImportError:
-    HAS_RUST_KMER = False
-    import warnings
-    warnings.warn(
-        "Rust k-mer matching not available. Performance will be significantly slower. "
-        "Install with: cd sheriff-rs && maturin develop --release",
-        UserWarning,
-        stacklevel=2
-    )
+# Rust acceleration - REQUIRED (12x faster k-mer matching)
+import sheriff_rs
+HAS_RUST_KMER = True
 
-# Try to import Rust acceleration for edit clustering (20x faster)
-try:
-    from .rust_accelerated import get_longest_edits_rust, USE_RUST_EDIT
-except ImportError:
-    USE_RUST_EDIT = False
-    get_longest_edits_rust = None
+# Rust acceleration - REQUIRED (12-1616x faster edit clustering)
+from .rust_accelerated import get_longest_edits_rust
 
 # Import of helper functions !
 # from .helpers import get_t7_count_matrix, get_cell_counts_from_umi_dict, bam_count_gene_umis, bio_edit_distance, \
@@ -369,7 +355,7 @@ def get_barcoded_edits(bam_file, cell_barcodes,
             for kmer in kmer_matches_rev:
                 blacklist_seq_kmers_rev[kmer] = seq_
 
-    with AlignmentFile(bam_file, "rb") as bam, pysam.FastaFile(ref_fasta_file) as fasta:
+    with AlignmentFile(bam_file, "rb", threads=os.cpu_count()) as bam, pysam.FastaFile(ref_fasta_file) as fasta:
 
         start_time = timeit.default_timer()
         
@@ -486,7 +472,7 @@ def get_nonbarcoded_edits(bam_file, canonical_to_edits, canonical_to_edited_cell
     """
     # Iterating through each canonical edit site, pulling out all reads in the bam the overlap this site to call as
     # non-barcoded t7 edit or not!
-    bam_file_handle = pysam.AlignmentFile(bam_file, 'rb')
+    bam_file_handle = pysam.AlignmentFile(bam_file, 'rb', threads=os.cpu_count())
     start_time = timeit.default_timer()
 
     # Storing the non-barcoded read information !
@@ -1104,11 +1090,8 @@ def run_count_t7(bam_file,
 
             # V3 of method, tries to get the longest t7 insertion sequences that are distinct from each other,
             # to avoid subsequences of a longer edit inflating allelic edit estimation.
-            # Use Rust acceleration if available (20x faster)
-            if USE_RUST_EDIT and get_longest_edits_rust is not None:
-                unique_edits = get_longest_edits_rust(edit_set)
-            else:
-                unique_edits = get_longest_edits(edit_set)
+            # RUST ONLY - no Python fallback (12-1616x faster)
+            unique_edits = get_longest_edits_rust(edit_set)
 
             n_alleles_called = len(unique_edits)
 

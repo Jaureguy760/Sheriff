@@ -1,0 +1,10 @@
+# Optimize for local CPU architecture (AVX2, SSE4.2, etc.)
+[build]
+rustflags = ["-C", "target-cpu=native"]
+
+# Additional optimizations for bioinformatics workloads
+[profile.release]
+# These are already in Cargo.toml but ensure they're used
+opt-level = 3
+lto = "fat"
+codegen-units = 1
