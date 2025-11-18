@@ -1,0 +1,20 @@
+# Rust build artifacts
+/target/
+Cargo.lock
+
+# Python bindings
+*.so
+*.pyd
+__pycache__/
+*.py[cod]
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
