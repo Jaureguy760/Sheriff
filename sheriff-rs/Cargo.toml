@@ -27,3 +27,7 @@ harness = false
 [[bench]]
 name = "umi_benchmarks"
 harness = false
+
+[[bench]]
+name = "bam_benchmarks"
+harness = false

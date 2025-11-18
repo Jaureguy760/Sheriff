@@ -1,0 +1,208 @@
+   Compiling sheriff-rs v0.1.0 (/home/user/Sheriff/sheriff-rs)
+    Finished `bench` profile [optimized] target(s) in 1.88s
+     Running unittests src/lib.rs (target/release/deps/sheriff_rs-205ef7b2b977fdb2)
+
+running 26 tests
+test bam::tests::test_bam_reader_creation ... ignored
+test bam::tests::test_bam_record_creation ... ignored
+test kmer::tests::test_case_insensitive_handling ... ignored
+test kmer::tests::test_kmer_counter_array_reuse ... ignored
+test kmer::tests::test_kmer_counter_basic ... ignored
+test kmer::tests::test_kmer_counter_getters ... ignored
+test kmer::tests::test_kmer_counter_saturation ... ignored
+test kmer::tests::test_kmer_counter_short_sequence ... ignored
+test kmer::tests::test_kmer_to_num_empty_sequence ... ignored
+test kmer::tests::test_kmer_to_num_matches_expected_hashes ... ignored
+test kmer::tests::test_match_kmer_basic ... ignored
+test kmer::tests::test_match_kmer_no_matches ... ignored
+test kmer::tests::test_match_kmer_sequence_too_short ... ignored
+test kmer::tests::test_nucleotide_to_bits_correctness ... ignored
+test kmer::tests::test_python_equivalence ... ignored
+test tests::test_version ... ignored
+test umi::tests::test_all_duplicates ... ignored
+test umi::tests::test_deduplicate_edge_cases ... ignored
+test umi::tests::test_deduplicate_known_inputs ... ignored
+test umi::tests::test_hamming_distance_edge_cases ... ignored
+test umi::tests::test_no_duplicates ... ignored
+test umi::tests::test_path_compression ... ignored
+test umi::tests::test_python_equivalence ... ignored
+test umi::tests::test_transitive_clustering ... ignored
+test umi::tests::test_union_find_basic ... ignored
+test umi::tests::test_within_hamming_threshold ... ignored
+
+test result: ok. 0 passed; 0 failed; 26 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running benches/bam_benchmarks.rs (target/release/deps/bam_benchmarks-cbba3efac819a3d6)
+Gnuplot not found, using plotters backend
+Benchmarking bam_record_creation
+Benchmarking bam_record_creation: Warming up for 3.0000 s
+Benchmarking bam_record_creation: Collecting 100 samples in estimated 5.0000 s (134M iterations)
+Benchmarking bam_record_creation: Analyzing
+bam_record_creation     time:   [36.829 ns 37.647 ns 38.821 ns]
+Found 13 outliers among 100 measurements (13.00%)
+  9 (9.00%) high mild
+  4 (4.00%) high severe
+
+Benchmarking bam_record_seq_len
+Benchmarking bam_record_seq_len: Warming up for 3.0000 s
+Benchmarking bam_record_seq_len: Collecting 100 samples in estimated 5.0000 s (8.2B iterations)
+Benchmarking bam_record_seq_len: Analyzing
+bam_record_seq_len      time:   [600.58 ps 602.70 ps 605.22 ps]
+Found 4 outliers among 100 measurements (4.00%)
+  2 (2.00%) high mild
+  2 (2.00%) high severe
+
+Benchmarking bam_reader_creation
+Benchmarking bam_reader_creation: Warming up for 3.0000 s
+Benchmarking bam_reader_creation: Collecting 100 samples in estimated 5.0000 s (430M iterations)
+Benchmarking bam_reader_creation: Analyzing
+bam_reader_creation     time:   [11.320 ns 11.348 ns 11.378 ns]
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+
+Benchmarking bam_record_clone
+Benchmarking bam_record_clone: Warming up for 3.0000 s
+Benchmarking bam_record_clone: Collecting 100 samples in estimated 5.0002 s (99M iterations)
+Benchmarking bam_record_clone: Analyzing
+bam_record_clone        time:   [49.648 ns 49.949 ns 50.259 ns]
+Found 5 outliers among 100 measurements (5.00%)
+  3 (3.00%) high mild
+  2 (2.00%) high severe
+
+Benchmarking bam_record_sizes/50
+Benchmarking bam_record_sizes/50: Warming up for 3.0000 s
+Benchmarking bam_record_sizes/50: Collecting 100 samples in estimated 5.0002 s (111M iterations)
+Benchmarking bam_record_sizes/50: Analyzing
+bam_record_sizes/50     time:   [44.402 ns 44.620 ns 44.879 ns]
+Found 7 outliers among 100 measurements (7.00%)
+  3 (3.00%) high mild
+  4 (4.00%) high severe
+Benchmarking bam_record_sizes/100
+Benchmarking bam_record_sizes/100: Warming up for 3.0000 s
+Benchmarking bam_record_sizes/100: Collecting 100 samples in estimated 5.0001 s (100M iterations)
+Benchmarking bam_record_sizes/100: Analyzing
+bam_record_sizes/100    time:   [46.447 ns 47.450 ns 48.978 ns]
+Found 15 outliers among 100 measurements (15.00%)
+  7 (7.00%) high mild
+  8 (8.00%) high severe
+Benchmarking bam_record_sizes/200
+Benchmarking bam_record_sizes/200: Warming up for 3.0000 s
+Benchmarking bam_record_sizes/200: Collecting 100 samples in estimated 5.0001 s (108M iterations)
+Benchmarking bam_record_sizes/200: Analyzing
+bam_record_sizes/200    time:   [47.546 ns 48.301 ns 49.278 ns]
+Found 13 outliers among 100 measurements (13.00%)
+  5 (5.00%) high mild
+  8 (8.00%) high severe
+Benchmarking bam_record_sizes/500
+Benchmarking bam_record_sizes/500: Warming up for 3.0000 s
+Benchmarking bam_record_sizes/500: Collecting 100 samples in estimated 5.0002 s (88M iterations)
+Benchmarking bam_record_sizes/500: Analyzing
+bam_record_sizes/500    time:   [55.069 ns 57.027 ns 59.899 ns]
+Found 8 outliers among 100 measurements (8.00%)
+  4 (4.00%) high mild
+  4 (4.00%) high severe
+
+     Running benches/kmer_benchmarks.rs (target/release/deps/kmer_benchmarks-2a89ba250d22837e)
+Gnuplot not found, using plotters backend
+Benchmarking kmer_to_num/6
+Benchmarking kmer_to_num/6: Warming up for 3.0000 s
+Benchmarking kmer_to_num/6: Collecting 100 samples in estimated 5.0000 s (1.3B iterations)
+Benchmarking kmer_to_num/6: Analyzing
+kmer_to_num/6           time:   [3.0237 ns 3.0628 ns 3.1064 ns]
+                        change: [-0.4395% +0.8885% +2.2448%] (p = 0.18 > 0.05)
+                        No change in performance detected.
+Found 14 outliers among 100 measurements (14.00%)
+  9 (9.00%) high mild
+  5 (5.00%) high severe
+Benchmarking kmer_to_num/8
+Benchmarking kmer_to_num/8: Warming up for 3.0000 s
+Benchmarking kmer_to_num/8: Collecting 100 samples in estimated 5.0000 s (1.1B iterations)
+Benchmarking kmer_to_num/8: Analyzing
+kmer_to_num/8           time:   [3.8559 ns 3.8824 ns 3.9152 ns]
+                        change: [+3.2599% +5.8588% +8.7777%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 12 outliers among 100 measurements (12.00%)
+  8 (8.00%) high mild
+  4 (4.00%) high severe
+Benchmarking kmer_to_num/10
+Benchmarking kmer_to_num/10: Warming up for 3.0000 s
+Benchmarking kmer_to_num/10: Collecting 100 samples in estimated 5.0000 s (883M iterations)
+Benchmarking kmer_to_num/10: Analyzing
+kmer_to_num/10          time:   [4.8882 ns 4.9203 ns 4.9601 ns]
+                        change: [+0.4018% +3.0162% +6.2081%] (p = 0.05 < 0.05)
+                        Change within noise threshold.
+Found 8 outliers among 100 measurements (8.00%)
+  1 (1.00%) high mild
+  7 (7.00%) high severe
+Benchmarking kmer_to_num/12
+Benchmarking kmer_to_num/12: Warming up for 3.0000 s
+Benchmarking kmer_to_num/12: Collecting 100 samples in estimated 5.0000 s (740M iterations)
+Benchmarking kmer_to_num/12: Analyzing
+kmer_to_num/12          time:   [5.3574 ns 5.4103 ns 5.4645 ns]
+                        change: [+24.934% +26.863% +28.856%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 11 outliers among 100 measurements (11.00%)
+  7 (7.00%) high mild
+  4 (4.00%) high severe
+
+Benchmarking match_kmer/100
+Benchmarking match_kmer/100: Warming up for 3.0000 s
+Benchmarking match_kmer/100: Collecting 100 samples in estimated 5.0014 s (12M iterations)
+Benchmarking match_kmer/100: Analyzing
+match_kmer/100          time:   [436.87 ns 444.27 ns 453.40 ns]
+                        change: [+2.9109% +5.2750% +7.7532%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 4 outliers among 100 measurements (4.00%)
+  1 (1.00%) high mild
+  3 (3.00%) high severe
+Benchmarking match_kmer/500
+Benchmarking match_kmer/500: Warming up for 3.0000 s
+Benchmarking match_kmer/500: Collecting 100 samples in estimated 5.0082 s (2.3M iterations)
+Benchmarking match_kmer/500: Analyzing
+match_kmer/500          time:   [2.0953 µs 2.1107 µs 2.1284 µs]
+                        change: [-1.4575% -0.3255% +1.0069%] (p = 0.62 > 0.05)
+                        No change in performance detected.
+Found 5 outliers among 100 measurements (5.00%)
+  3 (3.00%) high mild
+  2 (2.00%) high severe
+Benchmarking match_kmer/1000
+Benchmarking match_kmer/1000: Warming up for 3.0000 s
+Benchmarking match_kmer/1000: Collecting 100 samples in estimated 5.0004 s (1.2M iterations)
+Benchmarking match_kmer/1000: Analyzing
+match_kmer/1000         time:   [4.1761 µs 4.2332 µs 4.3058 µs]
+                        change: [-3.5728% -1.5726% +0.6711%] (p = 0.17 > 0.05)
+                        No change in performance detected.
+Found 10 outliers among 100 measurements (10.00%)
+  5 (5.00%) high mild
+  5 (5.00%) high severe
+Benchmarking match_kmer/5000
+Benchmarking match_kmer/5000: Warming up for 3.0000 s
+Benchmarking match_kmer/5000: Collecting 100 samples in estimated 5.0677 s (227k iterations)
+Benchmarking match_kmer/5000: Analyzing
+match_kmer/5000         time:   [21.191 µs 21.305 µs 21.433 µs]
+                        change: [-1.2498% +1.2959% +4.9729%] (p = 0.45 > 0.05)
+                        No change in performance detected.
+Found 8 outliers among 100 measurements (8.00%)
+  4 (4.00%) high mild
+  4 (4.00%) high severe
+
+Benchmarking match_kmer_k_size/4
+Benchmarking match_kmer_k_size/4: Warming up for 3.0000 s
+Benchmarking match_kmer_k_size/4: Collecting 100 samples in estimated 5.0151 s (1.5M iterations)
+Benchmarking match_kmer_k_size/4: Analyzing
+match_kmer_k_size/4     time:   [3.3950 µs 3.4682 µs 3.5620 µs]
+                        change: [+6.9357% +9.1090% +11.463%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 10 outliers among 100 measurements (10.00%)
+  4 (4.00%) high mild
+  6 (6.00%) high severe
+Benchmarking match_kmer_k_size/6
+Benchmarking match_kmer_k_size/6: Warming up for 3.0000 s
+Benchmarking match_kmer_k_size/6: Collecting 100 samples in estimated 5.0084 s (1.1M iterations)
+Benchmarking match_kmer_k_size/6: Analyzing
+match_kmer_k_size/6     time:   [4.3534 µs 4.4072 µs 4.4690 µs]
+Found 3 outliers among 100 measurements (3.00%)
+  3 (3.00%) high mild
+Benchmarking match_kmer_k_size/8
+Benchmarking match_kmer_k_size/8: Warming up for 3.0000 s
+Benchmarking match_kmer_k_size/8: Collecting 100 samples in estimated 5.0121 s (1.1M iterations)
