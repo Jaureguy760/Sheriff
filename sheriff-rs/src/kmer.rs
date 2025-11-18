@@ -137,7 +137,9 @@ pub fn kmer_to_num(kmer: &[u8]) -> u32 {
 /// - `whitelist`: Set of k-mer hashes to match against
 ///
 /// # Returns
-/// A vector of k-mer hashes that were found in both the sequence and whitelist.
+/// A vector of **unique** k-mer hashes that were found in both the sequence and whitelist.
+/// Matches Brad's Python implementation: returns each matching k-mer hash once, even if it
+/// appears multiple times in the sequence.
 ///
 /// # Examples
 /// ```
@@ -150,7 +152,8 @@ pub fn kmer_to_num(kmer: &[u8]) -> u32 {
 /// whitelist.insert(27); // Hash for "ACGT"
 ///
 /// let matches = match_kmer(sequence, k, &whitelist);
-/// assert_eq!(matches.len(), 2); // "ACGT" appears twice
+/// assert_eq!(matches.len(), 1); // "ACGT" appears twice but returns once
+/// assert_eq!(matches[0], 27);
 /// ```
 #[inline]
 pub fn match_kmer(sequence: &[u8], k: usize, whitelist: &FxHashSet<u32>) -> Vec<u32> {
@@ -158,17 +161,18 @@ pub fn match_kmer(sequence: &[u8], k: usize, whitelist: &FxHashSet<u32>) -> Vec<
         return Vec::new();
     }
 
-    let mut matches = Vec::new();
+    let mut matches = FxHashSet::default();
 
-    // Slide window across sequence
+    // Slide window across sequence, collecting unique matches
     for window in sequence.windows(k) {
         let hash = kmer_to_num(window);
         if whitelist.contains(&hash) {
-            matches.push(hash);
+            matches.insert(hash);
         }
     }
 
-    matches
+    // Convert to Vec for return (matches Python's tuple behavior)
+    matches.into_iter().collect()
 }
 
 /// K-mer frequency counter with array reuse pattern.
@@ -371,9 +375,9 @@ mod tests {
 
         let matches = match_kmer(sequence, k, &whitelist);
 
-        // "ACGT" appears at positions 0 and 4
-        assert_eq!(matches.len(), 2);
-        assert!(matches.iter().all(|&h| h == 27));
+        // "ACGT" appears at positions 0 and 4, but returns unique hash once
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0], 27);
     }
 
     #[test]
