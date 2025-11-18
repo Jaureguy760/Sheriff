@@ -5,6 +5,7 @@ edition = "2021"
 description = "Rust implementation of Sheriff k-mer and UMI processing"
 
 [lib]
+name = "sheriff_rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
