@@ -133,7 +133,7 @@ pub fn has_required_tags(record: &Record) -> bool {
 ///
 /// # Example
 /// ```no_run
-/// use sheriff_rs::bam::{BamProcessor, process_records};
+/// use sheriff_rs::bam::{BamProcessor, process_records, get_umi_and_barcode};
 ///
 /// let mut processor = BamProcessor::new("data.bam").unwrap();
 /// let mut count = 0;

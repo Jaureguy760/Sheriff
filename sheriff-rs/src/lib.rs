@@ -7,7 +7,6 @@
 pub mod kmer;
 pub mod umi;
 pub mod bam;
-pub mod simd;
 
 #[cfg(feature = "python")]
 pub mod python;
