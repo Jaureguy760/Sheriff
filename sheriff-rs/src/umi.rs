@@ -25,6 +25,7 @@
 //! Expected speedup: 3-6x over Python implementation
 
 use rustc_hash::FxHashMap;
+use rayon::prelude::*;
 
 /// Union-Find data structure with path compression and union-by-rank
 ///
@@ -352,6 +353,69 @@ pub fn deduplicate_umis_unionfind(
 
     // Convert to vector of groups
     groups.into_values().collect()
+}
+
+/// Deduplicate UMIs for multiple cells in parallel
+///
+/// This function processes multiple cells in parallel using Rayon, where each cell
+/// has a set of UMIs that need to be deduplicated independently.
+///
+/// # Performance
+///
+/// This is the **key parallelization opportunity** in Sheriff:
+/// - BAM file reading is inherently sequential (compressed format)
+/// - Per-cell processing is embarrassingly parallel (cells are independent)
+/// - Expected speedup: 6-8x on 8-core machines
+///
+/// # Time Complexity
+///
+/// For C cells with average U UMIs per cell:
+/// - Sequential: O(C × U² × L)
+/// - Parallel (P cores): O((C/P) × U² × L)
+///
+/// # Arguments
+///
+/// * `cells` - HashMap mapping cell barcodes to vectors of UMI sequences
+/// * `threshold` - Maximum Hamming distance to consider UMIs as duplicates
+///
+/// # Returns
+///
+/// HashMap mapping cell barcodes to the number of unique UMI groups in that cell
+///
+/// # Example
+///
+/// ```
+/// use sheriff_rs::deduplicate_cells_parallel;
+/// use std::collections::HashMap;
+///
+/// let mut cells = HashMap::new();
+/// cells.insert(
+///     b"CELL001".to_vec(),
+///     vec![b"ATCGATCG".to_vec(), b"ATCGATCC".to_vec()],
+/// );
+/// cells.insert(
+///     b"CELL002".to_vec(),
+///     vec![b"GCGCGCGC".to_vec(), b"GCGCGCGA".to_vec()],
+/// );
+///
+/// let results = deduplicate_cells_parallel(cells, 1);
+/// assert_eq!(results.len(), 2);
+/// assert_eq!(results[&b"CELL001".to_vec()], 1); // Both UMIs in same group
+/// assert_eq!(results[&b"CELL002".to_vec()], 1); // Both UMIs in same group
+/// ```
+pub fn deduplicate_cells_parallel(
+    cells: std::collections::HashMap<Vec<u8>, Vec<Vec<u8>>>,
+    threshold: usize,
+) -> std::collections::HashMap<Vec<u8>, usize> {
+    cells
+        .par_iter()
+        .map(|(cell_barcode, umis)| {
+            // Convert Vec<Vec<u8>> to Vec<&[u8]> for deduplicate_umis_unionfind
+            let umi_refs: Vec<&[u8]> = umis.iter().map(|u| u.as_slice()).collect();
+            let groups = deduplicate_umis_unionfind(&umi_refs, threshold);
+            (cell_barcode.clone(), groups.len())
+        })
+        .collect()
 }
 
 #[cfg(test)]
