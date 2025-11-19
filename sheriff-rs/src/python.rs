@@ -635,13 +635,11 @@ fn count_gene_umis_rust(
         .map(|chunk| chunk.to_vec())
         .collect();
 
-    Python::with_gil(|py| {
-        let py_list: Vec<PyObject> = rows
-            .into_iter()
-            .map(|row| PyList::new_bound(py, row).into())
-            .collect();
-        Ok(PyList::new_bound(py, py_list).into())
-    })
+    let py_list: Vec<PyObject> = rows
+        .into_iter()
+        .map(|row| PyList::new_bound(py, row).into())
+        .collect();
+    Ok(PyList::new_bound(py, py_list).into())
 }
 
 // ============================================================================

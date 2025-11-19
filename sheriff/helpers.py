@@ -439,9 +439,34 @@ def bam_count_gene_umis_contig(bam_file, cell_barcodes_dict, gene_names, id_to_g
 
     gene_indices = np.array(gene_indices, dtype=np.int64)
 
-    # Performing the counting with Numba speed-up
-    cell_by_gene_umi_counts_SPARSE_indices = get_cell_by_gene_umi_counts(len(cell_barcodes_dict), #len(gene_names),
-                                                                            gene_indices, gene_cell_indices, gene_cell_umis)
+    # Try using Rust implementation first (2-4x faster), fallback to Numba if unavailable
+    try:
+        import sheriff_rs
+
+        # Convert data to Rust-compatible format
+        gene_indices_list = gene_indices.astype(np.uint32).tolist()
+        gene_cell_indices_list = [arr.astype(np.uint32).tolist() for arr in gene_cell_indices]
+        gene_cell_umis_list = [[umi_arr.tolist() for umi_arr in cell_umis] for cell_umis in gene_cell_umis]
+
+        # Call Rust implementation (threshold=1 for Hamming distance)
+        rust_results = sheriff_rs.count_gene_umis_rust(
+            len(cell_barcodes_dict),
+            gene_indices_list,
+            gene_cell_indices_list,
+            gene_cell_umis_list,
+            1  # Hamming distance threshold
+        )
+
+        # Convert results to numpy array (n_nonzero × 3)
+        cell_by_gene_umi_counts_SPARSE_indices = np.array(rust_results, dtype=np.uint32)
+
+    except (ImportError, Exception) as e:
+        # Fall back to Numba implementation if Rust unavailable or errors
+        if verbose:
+            print(f"Using Numba implementation (Rust unavailable: {e})", file=sys.stdout, flush=True)
+
+        cell_by_gene_umi_counts_SPARSE_indices = get_cell_by_gene_umi_counts(len(cell_barcodes_dict), #len(gene_names),
+                                                                                gene_indices, gene_cell_indices, gene_cell_umis)
 
     # Constructing the sparse array from the collated sparse indices, need to do here because sparse array unsupported in numba.
     cell_by_gene_umi_counts_SPARSE = csr_array((cell_by_gene_umi_counts_SPARSE_indices[:, 0], # The counts
