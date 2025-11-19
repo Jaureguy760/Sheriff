@@ -18,8 +18,9 @@ pyo3 = { version = "0.21", features = ["extension-module"], optional = true }
 criterion = "0.5"
 
 [features]
-default = []
+default = ["simd"]
 python = ["pyo3"]
+simd = []
 
 [[bench]]
 name = "kmer_benchmarks"
