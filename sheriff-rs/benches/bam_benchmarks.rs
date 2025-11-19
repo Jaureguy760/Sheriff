@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use sheriff_rs::bam::{BamProcessor, collect_stats, get_umi_and_barcode, process_records};
+use sheriff_rs::bam::{BamProcessor, collect_stats, collect_stats_parallel, get_umi_and_barcode, process_records, process_records_parallel, group_by_cell_parallel};
 
 const BAM_PATH: &str = "../example_data/barcode_headAligned_anno.sorted.edit_regions_200kb.bam";
 
@@ -176,6 +176,82 @@ fn benchmark_bam_tag_extraction_only(c: &mut Criterion) {
     });
 }
 
+fn benchmark_bam_collect_stats_parallel(c: &mut Criterion) {
+    if !std::path::Path::new(BAM_PATH).exists() {
+        eprintln!("Skipping benchmark: BAM file not found");
+        return;
+    }
+
+    let mut group = c.benchmark_group("bam_stats_sequential_vs_parallel");
+
+    group.bench_function("sequential", |b| {
+        b.iter(|| {
+            let stats = collect_stats(black_box(BAM_PATH)).unwrap();
+            black_box(stats)
+        })
+    });
+
+    group.bench_function("parallel", |b| {
+        b.iter(|| {
+            let stats = collect_stats_parallel(black_box(BAM_PATH)).unwrap();
+            black_box(stats)
+        })
+    });
+
+    group.finish();
+}
+
+fn benchmark_bam_parallel_speedup(c: &mut Criterion) {
+    if !std::path::Path::new(BAM_PATH).exists() {
+        eprintln!("Skipping benchmark: BAM file not found");
+        return;
+    }
+
+    c.bench_function("bam_parallel_stats", |b| {
+        b.iter(|| {
+            let stats = collect_stats_parallel(black_box(BAM_PATH)).unwrap();
+            black_box(stats)
+        })
+    });
+}
+
+fn benchmark_bam_group_by_cell(c: &mut Criterion) {
+    if !std::path::Path::new(BAM_PATH).exists() {
+        eprintln!("Skipping benchmark: BAM file not found");
+        return;
+    }
+
+    c.bench_function("bam_group_by_cell_parallel", |b| {
+        b.iter(|| {
+            let cell_map = group_by_cell_parallel(black_box(BAM_PATH)).unwrap();
+            black_box(cell_map)
+        })
+    });
+}
+
+fn benchmark_bam_parallel_processing(c: &mut Criterion) {
+    if !std::path::Path::new(BAM_PATH).exists() {
+        eprintln!("Skipping benchmark: BAM file not found");
+        return;
+    }
+
+    c.bench_function("bam_process_records_parallel", |b| {
+        b.iter(|| {
+            use std::sync::atomic::{AtomicUsize, Ordering};
+            let count = AtomicUsize::new(0);
+
+            process_records_parallel(BAM_PATH, |record| {
+                if let Some((_umi, _cb)) = get_umi_and_barcode(record) {
+                    count.fetch_add(1, Ordering::Relaxed);
+                }
+            })
+            .unwrap();
+
+            black_box(count.load(Ordering::Relaxed))
+        })
+    });
+}
+
 criterion_group!(
     benches,
     benchmark_bam_open,
@@ -184,6 +260,10 @@ criterion_group!(
     benchmark_bam_collect_stats,
     benchmark_bam_per_read_cost,
     benchmark_bam_scaling,
-    benchmark_bam_tag_extraction_only
+    benchmark_bam_tag_extraction_only,
+    benchmark_bam_collect_stats_parallel,
+    benchmark_bam_parallel_speedup,
+    benchmark_bam_group_by_cell,
+    benchmark_bam_parallel_processing
 );
 criterion_main!(benches);

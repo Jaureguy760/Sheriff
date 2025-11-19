@@ -5,6 +5,7 @@
 
 use rust_htslib::bam::{Read, Reader, Record};
 use std::path::Path;
+use rayon::prelude::*;
 
 /// Error type for BAM processing
 #[derive(Debug)]
@@ -210,6 +211,123 @@ pub fn collect_stats<P: AsRef<Path>>(path: P) -> Result<BamStats> {
     Ok(stats)
 }
 
+/// Process BAM records in parallel using Rayon
+///
+/// This function reads all records into memory first, then processes them in parallel.
+/// This is efficient for medium-sized BAM files but may use significant memory for large files.
+///
+/// # Example
+/// ```no_run
+/// use sheriff_rs::bam::{process_records_parallel, get_umi_and_barcode};
+/// use std::sync::atomic::{AtomicUsize, Ordering};
+///
+/// let count = AtomicUsize::new(0);
+/// process_records_parallel("data.bam", |record| {
+///     if let Some((_umi, _cb)) = get_umi_and_barcode(record) {
+///         count.fetch_add(1, Ordering::Relaxed);
+///     }
+/// }).unwrap();
+/// ```
+pub fn process_records_parallel<P, F>(path: P, callback: F) -> Result<()>
+where
+    P: AsRef<Path>,
+    F: Fn(&Record) + Sync + Send,
+{
+    let mut processor = BamProcessor::new(path)?;
+
+    // Collect all records into a Vec (this uses memory!)
+    let records: Vec<Record> = processor
+        .reader_mut()
+        .records()
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    // Process in parallel using Rayon
+    records.par_iter().for_each(|record| {
+        callback(record);
+    });
+
+    Ok(())
+}
+
+/// Collect statistics from a BAM file in parallel
+///
+/// This is faster than `collect_stats` for large BAM files with many cores.
+/// Uses atomic operations to safely accumulate statistics across threads.
+pub fn collect_stats_parallel<P: AsRef<Path>>(path: P) -> Result<BamStats> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let total_reads = AtomicUsize::new(0);
+    let reads_with_umi = AtomicUsize::new(0);
+    let reads_with_cb = AtomicUsize::new(0);
+    let reads_with_both = AtomicUsize::new(0);
+    let total_bases = AtomicUsize::new(0);
+
+    process_records_parallel(path, |record| {
+        total_reads.fetch_add(1, Ordering::Relaxed);
+        total_bases.fetch_add(record.seq_len(), Ordering::Relaxed);
+
+        let has_umi = get_umi_tag(record).is_some();
+        let has_cb = get_cell_barcode_tag(record).is_some();
+
+        if has_umi {
+            reads_with_umi.fetch_add(1, Ordering::Relaxed);
+        }
+        if has_cb {
+            reads_with_cb.fetch_add(1, Ordering::Relaxed);
+        }
+        if has_umi && has_cb {
+            reads_with_both.fetch_add(1, Ordering::Relaxed);
+        }
+    })?;
+
+    Ok(BamStats {
+        total_reads: total_reads.load(Ordering::Relaxed),
+        reads_with_umi: reads_with_umi.load(Ordering::Relaxed),
+        reads_with_cb: reads_with_cb.load(Ordering::Relaxed),
+        reads_with_both: reads_with_both.load(Ordering::Relaxed),
+        total_bases: total_bases.load(Ordering::Relaxed),
+    })
+}
+
+/// Group records by cell barcode in parallel
+///
+/// Returns a HashMap where keys are cell barcodes and values are vectors of (UMI, sequence) tuples.
+/// This is useful for per-cell processing in Sheriff.
+///
+/// Note: This loads all data into memory, so use with caution on very large BAM files.
+pub fn group_by_cell_parallel<P: AsRef<Path>>(
+    path: P,
+) -> Result<std::collections::HashMap<Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>>> {
+    use std::sync::Mutex;
+
+    let mut processor = BamProcessor::new(path)?;
+
+    // Collect all records
+    let records: Vec<Record> = processor
+        .reader_mut()
+        .records()
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    // Use DashMap for concurrent HashMap access (or Mutex<HashMap>)
+    let cell_map: Mutex<std::collections::HashMap<Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>>> =
+        Mutex::new(std::collections::HashMap::new());
+
+    records.par_iter().for_each(|record| {
+        if let Some((umi, cb)) = get_umi_and_barcode(record) {
+            let umi_owned = umi.to_vec();
+            let cb_owned = cb.to_vec();
+            let seq = get_sequence(record);
+
+            let mut map = cell_map.lock().unwrap();
+            map.entry(cb_owned)
+                .or_insert_with(Vec::new)
+                .push((umi_owned, seq));
+        }
+    });
+
+    Ok(cell_map.into_inner().unwrap())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -273,5 +391,56 @@ mod tests {
         }).expect("Failed to process records");
 
         assert!(found_tags, "Should have found at least one record with tags");
+    }
+
+    #[test]
+    #[ignore]
+    fn test_parallel_stats_collection() {
+        let bam_path = "../example_data/barcode_headAligned_anno.sorted.edit_regions_200kb.bam";
+
+        if !std::path::Path::new(bam_path).exists() {
+            return;
+        }
+
+        // Get sequential stats
+        let stats_seq = collect_stats(bam_path).expect("Failed to collect stats");
+
+        // Get parallel stats
+        let stats_par = collect_stats_parallel(bam_path).expect("Failed to collect parallel stats");
+
+        // Results should be identical
+        assert_eq!(stats_seq.total_reads, stats_par.total_reads);
+        assert_eq!(stats_seq.reads_with_umi, stats_par.reads_with_umi);
+        assert_eq!(stats_seq.reads_with_cb, stats_par.reads_with_cb);
+        assert_eq!(stats_seq.reads_with_both, stats_par.reads_with_both);
+        assert_eq!(stats_seq.total_bases, stats_par.total_bases);
+
+        println!("Parallel BAM Stats Match!");
+        println!("  Total reads: {}", stats_par.total_reads);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_group_by_cell_parallel() {
+        let bam_path = "../example_data/barcode_headAligned_anno.sorted.edit_regions_200kb.bam";
+
+        if !std::path::Path::new(bam_path).exists() {
+            return;
+        }
+
+        let cell_map = group_by_cell_parallel(bam_path).expect("Failed to group by cell");
+
+        assert!(!cell_map.is_empty(), "Should have found cells");
+
+        let total_reads: usize = cell_map.values().map(|v| v.len()).sum();
+        println!("Grouped {} reads into {} cells", total_reads, cell_map.len());
+
+        // Check a random cell has valid data
+        if let Some((cb, reads)) = cell_map.iter().next() {
+            assert!(!cb.is_empty(), "Cell barcode should not be empty");
+            assert!(!reads.is_empty(), "Cell should have reads");
+            assert!(!reads[0].0.is_empty(), "UMI should not be empty");
+            assert!(!reads[0].1.is_empty(), "Sequence should not be empty");
+        }
     }
 }
