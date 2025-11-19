@@ -934,6 +934,12 @@ def run_count_t7(bam_file,
     cell_allelic_edits = np.zeros((len(cell_barcodes_list), len(called_edit_sites)), dtype=np.uint16)
     cells_edited = np.zeros((len(cell_barcodes_list), len(called_edit_sites)), dtype=np.uint16)
 
+    # OPTIMIZATION: Pre-compute edit site index mapping for O(1) lookup instead of O(n) list.index()
+    # This is critical for performance since we do this lookup for every edit site of every cell
+    edit_site_to_index = {
+        edit_site: i for i, edit_site in enumerate(called_edit_sites)
+    }
+
     for cell_barcode, edit_sites_to_edits in cells_to_canonical_and_edits.items():
 
         celli = cell_barcodes_dict[cell_barcode]
@@ -941,9 +947,9 @@ def run_count_t7(bam_file,
         for edit_site, edits in edit_sites_to_edits.items():
 
             edit_site_copy_number = edit_sites_to_copy_number[edit_site]
-            
-            # .index might be kinda slow, but seems correct
-            edit_sitei = called_edit_sites.index( edit_site )
+
+            # OPTIMIZED: Use pre-computed dict for O(1) lookup instead of O(n) list.index()
+            edit_sitei = edit_site_to_index[edit_site]
 
             cells_edited[celli, edit_sitei] += 1
 
@@ -1046,10 +1052,14 @@ def run_count_t7(bam_file,
             ### reflect the order within the chromosomes, so if processing a bam with reads ACROSS chromosomes this will
             ### result in a different order!!
             edit_names = list( edit_site_ranges.df['Name'] )
+            # OPTIMIZATION: Pre-compute edit name index mapping for O(1) lookup
+            edit_name_to_index = {name: i for i, name in enumerate(edit_names)}
+
             for i, edit_name in enumerate(genic_edits):
 
                 n_intersects = sum( edit_site_ranges.intersect( gene_ranges ).df['Name'].values==edit_name )
-                edit_entry = edit_names.index( edit_name )
+                # OPTIMIZED: Use pre-computed dict for O(1) lookup instead of O(n) list.index()
+                edit_entry = edit_name_to_index[edit_name]
 
                 edit_site = called_edit_sites[ edit_entry ]
                 edit_site_copy_number = edit_sites_to_copy_number[edit_site]
@@ -1090,12 +1100,16 @@ def run_count_t7(bam_file,
         # For every edit that overlaps a gene, we will exclude these from our final list, and replace them with the
         # gene level allelic edit calls!
         called_edit_site_names = [f'{edit_.chrom}:{edit_.ref_pos}' for edit_ in called_edit_sites]
+        # OPTIMIZATION: Pre-compute called edit site names index mapping for O(1) lookup
+        called_edit_site_name_to_index = {name: i for i, name in enumerate(called_edit_site_names)}
+
         genes_and_edits = list(genes_to_edits.keys()) + [edit_name for edit_name in called_edit_site_names
                                                                                             if edit_name not in genic_edits]
         cell_allelic_gene_edits = np.zeros((len(cell_barcodes_list), len(genes_and_edits)), dtype=np.uint16)
         for loci, gene_or_edit in enumerate(genes_and_edits):
             if gene_or_edit in genes_to_edits: # Is a gene, need to collapse it's edits to make a gene-level allelic call.
-                gene_edit_indices = [called_edit_site_names.index(genic_edit)
+                # OPTIMIZED: Use pre-computed dict for O(1) lookup instead of O(n) list.index() in list comprehension
+                gene_edit_indices = [called_edit_site_name_to_index[genic_edit]
                                      for genic_edit in genes_to_edits[ gene_or_edit ]]
                 # Debug check
                 #print( np.all(np.array(called_edit_site_names)[gene_edit_indices] == genes_to_edits[ gene_or_edit ]) )
@@ -1110,7 +1124,8 @@ def run_count_t7(bam_file,
                 cell_allelic_gene_edits[:, loci] = gene_allelic_edits
 
             else: # Is an edit site that does not overlap the gene, so no need to collapse !
-                cell_allelic_gene_edits[:, loci] = cell_allelic_edits[:, called_edit_site_names.index(gene_or_edit)]
+                # OPTIMIZED: Use pre-computed dict for O(1) lookup instead of O(n) list.index()
+                cell_allelic_gene_edits[:, loci] = cell_allelic_edits[:, called_edit_site_name_to_index[gene_or_edit]]
 
     # Diagnostic check, still calling same number of cells edited for each edit site?
     if verbosity >= 2:
