@@ -265,6 +265,9 @@ fn hamming_distance_scalar(a: &[u8], b: &[u8]) -> usize {
 /// as mismatches exceed the threshold. Combined with SIMD, this provides
 /// significant speedup for UMI deduplication.
 ///
+/// **Note**: For typical 12bp UMIs with threshold=1, scalar implementation with
+/// early exit is often faster. SIMD provides benefits for longer sequences (16bp+).
+///
 /// # Arguments
 ///
 /// * `a` - First sequence
@@ -285,6 +288,12 @@ fn hamming_distance_scalar(a: &[u8], b: &[u8]) -> usize {
 /// ```
 #[inline]
 pub fn within_hamming_threshold_simd(a: &[u8], b: &[u8], threshold: usize) -> bool {
+    // For short sequences with low threshold, scalar early exit is faster
+    let len = a.len().min(b.len());
+    if len < 16 {
+        return within_hamming_threshold_scalar(a, b, threshold);
+    }
+
     #[cfg(all(target_arch = "x86_64", feature = "simd"))]
     {
         if is_x86_feature_detected!("avx512f")
