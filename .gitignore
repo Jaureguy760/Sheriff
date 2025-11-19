@@ -31,3 +31,4 @@ subset_500_cell_sheriff_output/
 build/
 dist/
 Sheriff.egg-info/
+sheriff_rs.so
