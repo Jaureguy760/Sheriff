@@ -1,0 +1,10 @@
+{
+  "summary": {
+    "kmer_conversion": 8.3,
+    "kmer_matching": null,
+    "umi_deduplication": 50.05,
+    "parallel_umi": null
+  },
+  "estimated_speedup": 2.1005565970593776,
+  "timestamp": "2025-11-19 05:25:51"
+}
