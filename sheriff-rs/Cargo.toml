@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 rustc-hash = "2.0"
 rayon = "1.8"
+rust-htslib = "0.47"
 pyo3 = { version = "0.21", features = ["extension-module"], optional = true }
 
 [dev-dependencies]

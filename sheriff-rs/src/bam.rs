@@ -1,47 +1,213 @@
-//! BAM file processing module
+//! BAM file processing module with rust-htslib
 //!
-//! This module provides utilities for reading and processing BAM (Binary Alignment Map) files.
+//! This module provides high-performance utilities for reading and processing
+//! BAM (Binary Alignment Map) files using rust-htslib for zero-copy operations.
 
-/// A simple BAM record representation
-#[derive(Debug, Clone)]
-pub struct BamRecord {
-    /// Query name
-    pub qname: String,
-    /// Sequence
-    pub seq: String,
-    /// Quality scores
-    pub qual: String,
-}
+use rust_htslib::bam::{Read, Reader, Record};
+use std::path::Path;
 
-impl BamRecord {
-    /// Create a new BamRecord
-    pub fn new(qname: String, seq: String, qual: String) -> Self {
-        BamRecord { qname, seq, qual }
-    }
-
-    /// Get the sequence length
-    pub fn seq_len(&self) -> usize {
-        self.seq.len()
-    }
-}
-
-/// A BAM file reader
+/// Error type for BAM processing
 #[derive(Debug)]
-pub struct BamReader {
-    /// File path
-    path: String,
+pub enum BamError {
+    /// IO error
+    IoError(std::io::Error),
+    /// BAM parsing error
+    ParseError(String),
+    /// Missing required tag
+    MissingTag(String),
 }
 
-impl BamReader {
-    /// Create a new BamReader
-    pub fn new(path: String) -> Self {
-        BamReader { path }
+impl std::fmt::Display for BamError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BamError::IoError(e) => write!(f, "IO error: {}", e),
+            BamError::ParseError(s) => write!(f, "Parse error: {}", s),
+            BamError::MissingTag(s) => write!(f, "Missing tag: {}", s),
+        }
+    }
+}
+
+impl std::error::Error for BamError {}
+
+impl From<std::io::Error> for BamError {
+    fn from(err: std::io::Error) -> Self {
+        BamError::IoError(err)
+    }
+}
+
+impl From<rust_htslib::errors::Error> for BamError {
+    fn from(err: rust_htslib::errors::Error) -> Self {
+        BamError::ParseError(format!("{:?}", err))
+    }
+}
+
+pub type Result<T> = std::result::Result<T, BamError>;
+
+/// Zero-copy BAM record processor
+pub struct BamProcessor {
+    reader: Reader,
+}
+
+impl BamProcessor {
+    /// Create a new BAM processor from a file path
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let reader = Reader::from_path(path)?;
+        Ok(BamProcessor { reader })
     }
 
-    /// Get the file path
-    pub fn path(&self) -> &str {
-        &self.path
+    /// Enable multi-threaded BAM decompression
+    pub fn set_threads(&mut self, n_threads: usize) -> Result<()> {
+        self.reader
+            .set_threads(n_threads)
+            .map_err(|e| BamError::ParseError(format!("Failed to set threads: {:?}", e)))
     }
+
+    /// Get the underlying reader
+    pub fn reader(&self) -> &Reader {
+        &self.reader
+    }
+
+    /// Get mutable reference to the underlying reader
+    pub fn reader_mut(&mut self) -> &mut Reader {
+        &mut self.reader
+    }
+}
+
+/// Extract UMI tag from BAM record (zero-copy)
+///
+/// Sheriff uses the "pN" tag for UMI sequences.
+/// Returns a byte slice pointing directly into the BAM record (no allocation).
+#[inline]
+pub fn get_umi_tag(record: &Record) -> Option<&[u8]> {
+    use rust_htslib::bam::record::Aux;
+    match record.aux(b"pN").ok()? {
+        Aux::String(s) => Some(s.as_bytes()),
+        _ => None,
+    }
+}
+
+/// Extract cell barcode tag from BAM record (zero-copy)
+///
+/// Sheriff uses the "CB" tag for cell barcodes.
+/// Returns a byte slice pointing directly into the BAM record (no allocation).
+#[inline]
+pub fn get_cell_barcode_tag(record: &Record) -> Option<&[u8]> {
+    use rust_htslib::bam::record::Aux;
+    match record.aux(b"CB").ok()? {
+        Aux::String(s) => Some(s.as_bytes()),
+        _ => None,
+    }
+}
+
+/// Extract both UMI and cell barcode tags (zero-copy)
+///
+/// Returns (umi, cell_barcode) as byte slices.
+#[inline]
+pub fn get_umi_and_barcode(record: &Record) -> Option<(&[u8], &[u8])> {
+    let umi = get_umi_tag(record)?;
+    let cell_barcode = get_cell_barcode_tag(record)?;
+    Some((umi, cell_barcode))
+}
+
+/// Extract sequence from BAM record (zero-copy via indexing)
+///
+/// Returns the DNA sequence as a Vec<u8>.
+/// Note: rust-htslib doesn't provide zero-copy sequence access due to
+/// BAM's 4-bit encoding, but this is still much faster than Python.
+#[inline]
+pub fn get_sequence(record: &Record) -> Vec<u8> {
+    record.seq().as_bytes()
+}
+
+/// Check if record has required tags for Sheriff processing
+#[inline]
+pub fn has_required_tags(record: &Record) -> bool {
+    get_umi_tag(record).is_some() && get_cell_barcode_tag(record).is_some()
+}
+
+/// Process BAM records with a callback function
+///
+/// This provides an iterator-style interface for processing BAM records
+/// with zero-copy tag extraction.
+///
+/// # Example
+/// ```no_run
+/// use sheriff_rs::bam::{BamProcessor, process_records};
+///
+/// let mut processor = BamProcessor::new("data.bam").unwrap();
+/// let mut count = 0;
+///
+/// process_records(&mut processor, |record| {
+///     if let Some((umi, cb)) = get_umi_and_barcode(record) {
+///         count += 1;
+///     }
+///     Ok(())
+/// }).unwrap();
+/// ```
+pub fn process_records<F>(processor: &mut BamProcessor, mut callback: F) -> Result<()>
+where
+    F: FnMut(&Record) -> Result<()>,
+{
+    for result in processor.reader_mut().records() {
+        let record = result?;
+        callback(&record)?;
+    }
+    Ok(())
+}
+
+/// Statistics from BAM processing
+#[derive(Debug, Default, Clone)]
+pub struct BamStats {
+    /// Total reads processed
+    pub total_reads: usize,
+    /// Reads with UMI tag
+    pub reads_with_umi: usize,
+    /// Reads with cell barcode tag
+    pub reads_with_cb: usize,
+    /// Reads with both UMI and CB tags
+    pub reads_with_both: usize,
+    /// Total bases sequenced
+    pub total_bases: usize,
+}
+
+impl BamStats {
+    /// Create new empty stats
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Update stats with a BAM record
+    #[inline]
+    pub fn update(&mut self, record: &Record) {
+        self.total_reads += 1;
+        self.total_bases += record.seq_len();
+
+        let has_umi = get_umi_tag(record).is_some();
+        let has_cb = get_cell_barcode_tag(record).is_some();
+
+        if has_umi {
+            self.reads_with_umi += 1;
+        }
+        if has_cb {
+            self.reads_with_cb += 1;
+        }
+        if has_umi && has_cb {
+            self.reads_with_both += 1;
+        }
+    }
+}
+
+/// Collect statistics from a BAM file
+pub fn collect_stats<P: AsRef<Path>>(path: P) -> Result<BamStats> {
+    let mut processor = BamProcessor::new(path)?;
+    let mut stats = BamStats::new();
+
+    process_records(&mut processor, |record| {
+        stats.update(record);
+        Ok(())
+    })?;
+
+    Ok(stats)
 }
 
 #[cfg(test)]
@@ -49,18 +215,63 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_bam_record_creation() {
-        let record = BamRecord::new(
-            "read1".to_string(),
-            "ACGTACGTACGT".to_string(),
-            "IIIIIIIIIIII".to_string(),
-        );
-        assert_eq!(record.seq_len(), 12);
+    fn test_bam_error_display() {
+        let err = BamError::MissingTag("pN".to_string());
+        assert_eq!(format!("{}", err), "Missing tag: pN");
     }
 
     #[test]
-    fn test_bam_reader_creation() {
-        let reader = BamReader::new("/path/to/file.bam".to_string());
-        assert_eq!(reader.path(), "/path/to/file.bam");
+    fn test_bam_stats_creation() {
+        let stats = BamStats::new();
+        assert_eq!(stats.total_reads, 0);
+        assert_eq!(stats.reads_with_umi, 0);
+    }
+
+    // Integration test with real BAM file (requires example data)
+    #[test]
+    #[ignore] // Only run when example_data is available
+    fn test_real_bam_processing() {
+        let bam_path = "../example_data/barcode_headAligned_anno.sorted.edit_regions_200kb.bam";
+
+        if !std::path::Path::new(bam_path).exists() {
+            return; // Skip if file doesn't exist
+        }
+
+        let stats = collect_stats(bam_path).expect("Failed to collect stats");
+
+        assert!(stats.total_reads > 0, "Should have processed some reads");
+        assert!(stats.reads_with_both > 0, "Should have reads with UMI and CB tags");
+
+        println!("BAM Stats:");
+        println!("  Total reads: {}", stats.total_reads);
+        println!("  Reads with UMI: {}", stats.reads_with_umi);
+        println!("  Reads with CB: {}", stats.reads_with_cb);
+        println!("  Reads with both: {}", stats.reads_with_both);
+        println!("  Total bases: {}", stats.total_bases);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_zero_copy_tag_extraction() {
+        let bam_path = "../example_data/barcode_headAligned_anno.sorted.edit_regions_200kb.bam";
+
+        if !std::path::Path::new(bam_path).exists() {
+            return;
+        }
+
+        let mut processor = BamProcessor::new(bam_path).expect("Failed to open BAM");
+        let mut found_tags = false;
+
+        process_records(&mut processor, |record| {
+            if let Some((umi, cb)) = get_umi_and_barcode(record) {
+                // These are zero-copy byte slices
+                assert!(umi.len() > 0, "UMI should not be empty");
+                assert!(cb.len() > 0, "Cell barcode should not be empty");
+                found_tags = true;
+            }
+            Ok(())
+        }).expect("Failed to process records");
+
+        assert!(found_tags, "Should have found at least one record with tags");
     }
 }
