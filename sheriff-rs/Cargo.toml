@@ -18,7 +18,7 @@ pyo3 = { version = "0.21", features = ["extension-module"], optional = true }
 criterion = "0.5"
 
 [features]
-default = ["simd"]
+default = ["python", "simd"]
 python = ["pyo3"]
 simd = []
 

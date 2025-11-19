@@ -501,6 +501,150 @@ fn deduplicate_cells_parallel(py: Python, cells: &Bound<'_, PyDict>, threshold: 
 }
 
 // ============================================================================
+// Gene UMI Counting Bindings
+// ============================================================================
+
+/// Count gene UMIs across cells with deduplication.
+///
+/// This function processes gene expression data organized by gene, where each gene
+/// has a set of cells and each cell has a set of UMIs. It deduplicates UMIs within
+/// each gene-cell combination and returns sparse matrix indices.
+///
+/// Args:
+///     total_cells (int): Total number of cells in the dataset
+///     gene_indices (list[int]): Array of gene indices (column indices in output matrix)
+///     gene_cell_indices (list[list[int]]): For each gene, list of cell indices with UMIs
+///     gene_cell_umis (list[list[list[str]]]): For each gene, for each cell, list of UMI sequences
+///     threshold (int): Hamming distance threshold for UMI deduplication (typically 1)
+///
+/// Returns:
+///     numpy.ndarray: 2D array of shape (n_nonzero, 3) where each row is (count, cell_idx, gene_idx)
+///
+/// Examples:
+///     >>> gene_indices = [0, 1]
+///     >>> gene_cell_indices = [[0, 1], [2]]
+///     >>> gene_cell_umis = [
+///     ...     [["ATCGATCG", "ATCGATCC"], ["GCGCGCGC"]],  # Gene 0
+///     ...     [["TTTTTTTT", "TTTTTTTT"]],                 # Gene 1
+///     ... ]
+///     >>> results = count_gene_umis_rust(100, gene_indices, gene_cell_indices, gene_cell_umis, 1)
+///     >>> results.shape
+///     (3, 3)
+///     >>> # Results: [[1, 0, 0], [1, 1, 0], [1, 2, 1]]
+///     >>> #          count, cell, gene
+///
+/// Performance:
+///     Expected speedup: 2-4x over Numba implementation
+///     This optimizes the largest remaining bottleneck (5.25% of total runtime)
+///
+/// Note:
+///     This function is a drop-in replacement for the Numba JIT version in helpers.py.
+///     It uses the same Union-Find UMI deduplication algorithm but with native Rust performance.
+#[pyfunction]
+#[pyo3(text_signature = "(total_cells, gene_indices, gene_cell_indices, gene_cell_umis, threshold)")]
+fn count_gene_umis_rust(
+    py: Python,
+    total_cells: usize,
+    gene_indices: Vec<u32>,
+    gene_cell_indices: Vec<Vec<u32>>,
+    gene_cell_umis: Vec<Vec<Vec<String>>>,
+    threshold: usize,
+) -> PyResult<PyObject> {
+    // Validate inputs
+    if gene_indices.len() != gene_cell_indices.len() {
+        return Err(PyValueError::new_err(
+            "gene_indices and gene_cell_indices must have the same length"
+        ));
+    }
+
+    if gene_indices.len() != gene_cell_umis.len() {
+        return Err(PyValueError::new_err(
+            "gene_indices and gene_cell_umis must have the same length"
+        ));
+    }
+
+    // Validate that gene_cell_indices and gene_cell_umis have matching lengths
+    for i in 0..gene_indices.len() {
+        if gene_cell_indices[i].len() != gene_cell_umis[i].len() {
+            return Err(PyValueError::new_err(format!(
+                "Gene {}: gene_cell_indices and gene_cell_umis must have matching cell counts",
+                gene_indices[i]
+            )));
+        }
+    }
+
+    // Validate UMI sequences
+    for (gene_i, cell_umis_list) in gene_cell_umis.iter().enumerate() {
+        for (cell_i, umis) in cell_umis_list.iter().enumerate() {
+            if !umis.is_empty() {
+                // Check that all UMIs are the same length
+                let first_len = umis[0].len();
+                if !umis.iter().all(|umi| umi.len() == first_len) {
+                    return Err(PyValueError::new_err(format!(
+                        "Gene {}, Cell {}: All UMIs must be the same length",
+                        gene_indices[gene_i], gene_cell_indices[gene_i][cell_i]
+                    )));
+                }
+
+                // Validate UMI sequences contain only ACGT
+                for umi in umis {
+                    if !umi.bytes().all(|b| matches!(b, b'A' | b'C' | b'G' | b'T' | b'a' | b'c' | b'g' | b't')) {
+                        return Err(PyValueError::new_err(
+                            "UMIs must contain only A, C, G, T (case-insensitive)"
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    // Convert String UMIs to Vec<u8> for Rust processing
+    let gene_cell_umis_bytes: Vec<Vec<Vec<Vec<u8>>>> = gene_cell_umis
+        .into_iter()
+        .map(|cell_umis_list| {
+            cell_umis_list
+                .into_iter()
+                .map(|umis| umis.into_iter().map(|umi| umi.into_bytes()).collect())
+                .collect()
+        })
+        .collect();
+
+    // Call the Rust implementation
+    let results = crate::gene::count_gene_umis(
+        total_cells,
+        &gene_indices,
+        &gene_cell_indices,
+        &gene_cell_umis_bytes,
+        threshold,
+    );
+
+    // Convert results to numpy array (n_nonzero × 3)
+    // Format: (count, cell_idx, gene_idx)
+    let n = results.len();
+    let mut array_data: Vec<u32> = Vec::with_capacity(n * 3);
+
+    for (count, cell_idx, gene_idx) in results {
+        array_data.push(count);
+        array_data.push(cell_idx);
+        array_data.push(gene_idx);
+    }
+
+    // Convert to Python list of lists (will be converted to numpy array in Python)
+    let rows: Vec<Vec<u32>> = array_data
+        .chunks(3)
+        .map(|chunk| chunk.to_vec())
+        .collect();
+
+    Python::with_gil(|py| {
+        let py_list: Vec<PyObject> = rows
+            .into_iter()
+            .map(|row| PyList::new_bound(py, row).into())
+            .collect();
+        Ok(PyList::new_bound(py, py_list).into())
+    })
+}
+
+// ============================================================================
 // Module Setup
 // ============================================================================
 
@@ -576,6 +720,9 @@ fn sheriff_rs_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(deduplicate_umis_detailed, m)?)?;
     m.add_function(wrap_pyfunction!(hamming_distance, m)?)?;
     m.add_function(wrap_pyfunction!(deduplicate_cells_parallel, m)?)?;
+
+    // Add gene UMI counting functions
+    m.add_function(wrap_pyfunction!(count_gene_umis_rust, m)?)?;
 
     Ok(())
 }

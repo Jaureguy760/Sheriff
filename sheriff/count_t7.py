@@ -435,58 +435,91 @@ def get_nonbarcoded_edits(bam_file, canonical_to_edits, canonical_to_edited_cell
     # edit_no_bc_cell_umis = defaultdict(dict)
     canonical_edit_no_bc_cell_umis = defaultdict(lambda: defaultdict(set))
 
-    for i, (edit_site, edits) in enumerate( canonical_to_edits.items() ):
+    # OPTIMIZATION: Group edit sites by chromosome and batch nearby ones to reduce redundant BAM.fetch() calls
+    edit_sites_by_chr = defaultdict(list)
+    for edit_site in canonical_to_edits.keys():
+        edit_sites_by_chr[edit_site.chrom].append(edit_site)
 
-        edit_chr = edit_site.chrom
-        edit_pos = edit_site.ref_pos
-        edit_window_start = max([edit_pos-dist, 0]) # Accounting for edge of chromosome.
-        edit_window_end = edit_pos+dist # pysam is OK with trying to fetch greater than chromosome length.
+    # Sort edit sites by position within each chromosome
+    for chr_name in edit_sites_by_chr:
+        edit_sites_by_chr[chr_name].sort(key=lambda x: x.ref_pos)
 
-        # Getting set of cells that are called as edited for this edit site
-        edit_cells = canonical_to_edited_cells[edit_site]
+    # Process edit sites in batches to reduce BAM.fetch() calls
+    fetch_count = 0
+    total_edit_sites = len(canonical_to_edits)
+    processed_count = 0
 
-        # Getting set of barcoded reads that overlap this edit site
-        t7_barcoded_read_set = []
-        [t7_barcoded_read_set.extend(edit_reads_filtered[edit_data]) for edit_data in edits]
-        t7_barcoded_read_set = set( t7_barcoded_read_set )
+    for chr_name, chr_edit_sites in edit_sites_by_chr.items():
+        # Batch nearby edit sites (within 2*dist of each other)
+        batch_threshold = 2 * dist
+        i = 0
 
-        read_positions = []
-        for read in bam_file_handle.fetch(edit_chr, edit_window_start, edit_window_end):
-            ### Only need to filter if is a edited cell.
-            cell_barcode = read.get_tag('CB')
+        while i < len(chr_edit_sites):
+            # Start a new batch
+            batch_start_idx = i
+            batch_end_idx = i
+            batch_region_start = chr_edit_sites[i].ref_pos
+            batch_region_end = chr_edit_sites[i].ref_pos
 
-            ### Already counted as barcoded, so don't need to filter.
-            if read.query_name in t7_barcoded_read_set:
-                continue
+            # Extend batch while edit sites are nearby
+            while (batch_end_idx + 1 < len(chr_edit_sites) and
+                   chr_edit_sites[batch_end_idx + 1].ref_pos <= batch_region_end + batch_threshold):
+                batch_end_idx += 1
+                batch_region_end = chr_edit_sites[batch_end_idx].ref_pos
 
-            read_positions.append( read.pos )
+            # Fetch reads for the entire batch region
+            batch_window_start = max(batch_region_start - dist, 0)
+            batch_window_end = batch_region_end + dist
 
-            # NOTE DECIDED to completely relax this criteria, so that we essentially black-list around all
-            # canonical edit sites so they do not contribute to the mRNA counting downstream.
-            edit_pos = edit_site.ref_pos  # This is actually where the insert starts
-            read_edit_dist = read.pos - edit_pos
+            # Single fetch for all edit sites in this batch
+            fetch_count += 1
+            batch_reads = list(bam_file_handle.fetch(chr_name, batch_window_start, batch_window_end))
 
-            if (abs(read_edit_dist) <= dist):
-                #### Meets criteria for non-barcoded t7 edit!!!
-                t7_nonbarcoded_reads.append(read.query_name)
-                nonbarcoded_umi[cell_barcode].add( read.get_tag('pN') )
+            # Process each edit site in the batch
+            for edit_site in chr_edit_sites[batch_start_idx:batch_end_idx + 1]:
+                edits = canonical_to_edits[edit_site]
 
-                # Keeping track of all non-bc t7s, associating with each canonical edit-site
-                canonical_edit_no_bc_cell_umis[edit_site][cell_barcode].add(  read.get_tag('pN') )
+                # Getting set of barcoded reads that overlap this edit site
+                t7_barcoded_read_set = []
+                [t7_barcoded_read_set.extend(edit_reads_filtered[edit_data]) for edit_data in edits]
+                t7_barcoded_read_set = set(t7_barcoded_read_set)
 
-        ### For debugging to make sure the windowing strategy is correct !!
-        ### NOTE observed SOME reads that are slightly outside the query region, reading here it appears that this occurs
-        ### if there is a partial alignment that DOES overlap with the position. This is handled by still applying the
-        ### distance criteria above
-        # import matplotlib.pyplot as plt
-        # fig, ax = plt.subplots()
-        # ax.hist(read_positions, bins=50)
-        # ax.vlines(edit_window_start, 0, 100, color='red')
-        # ax.vlines(edit_window_end, 0, 100, color='red')
-        # plt.show()
-        if i % 50 == 0 and verbosity==1:
-            print(f"PROCESSED {i} canonical-edit-sites in {(timeit.default_timer() - start_time) / 60:.3f} minutes",
-                                                                                            file=sys.stdout, flush=True)
+                edit_pos = edit_site.ref_pos
+
+                # Process reads from the batch that are relevant to this edit site
+                for read in batch_reads:
+                    # Skip if already counted as barcoded
+                    if read.query_name in t7_barcoded_read_set:
+                        continue
+
+                    # Check if read is within distance of this specific edit site
+                    read_edit_dist = read.pos - edit_pos
+                    if abs(read_edit_dist) > dist:
+                        continue
+
+                    # Meets criteria for non-barcoded t7 edit
+                    cell_barcode = read.get_tag('CB')
+
+                    if read.query_name not in t7_nonbarcoded_reads:
+                        t7_nonbarcoded_reads.append(read.query_name)
+                    nonbarcoded_umi[cell_barcode].add(read.get_tag('pN'))
+                    canonical_edit_no_bc_cell_umis[edit_site][cell_barcode].add(read.get_tag('pN'))
+
+                processed_count += 1
+                if processed_count % 50 == 0 and verbosity == 1:
+                    print(f"PROCESSED {processed_count} / {total_edit_sites} canonical-edit-sites "
+                          f"in {(timeit.default_timer() - start_time) / 60:.3f} minutes "
+                          f"({fetch_count} BAM fetches)",
+                          file=sys.stdout, flush=True)
+
+            # Move to next batch
+            i = batch_end_idx + 1
+
+    if verbosity >= 1:
+        print(f"Completed non-barcoded edit processing: {fetch_count} BAM fetches for {total_edit_sites} edit sites "
+              f"(reduction: {total_edit_sites - fetch_count} fetches saved, "
+              f"{100 * (1 - fetch_count / max(total_edit_sites, 1)):.1f}% reduction)",
+              file=sys.stdout, flush=True)
 
     return t7_nonbarcoded_reads, nonbarcoded_umi, canonical_edit_no_bc_cell_umis
 
@@ -1190,30 +1223,73 @@ def run_count_t7(bam_file,
     # Run using prefiltered non-t7 bam
     # after_t7_edits_to_bc_to_umis = defaultdict(dict) # Will also count the reads remaining per edit site !
     after_t7_edits_to_bc_to_umis = defaultdict(lambda: defaultdict(set))
+
+    # OPTIMIZATION: Batch nearby edit sites to reduce redundant BAM.fetch() calls
+    edit_sites_by_chr_umi = defaultdict(list)
+    for edit_site in called_edit_sites:
+        edit_sites_by_chr_umi[edit_site.chrom].append(edit_site)
+
+    # Sort edit sites by position within each chromosome
+    for chr_name in edit_sites_by_chr_umi:
+        edit_sites_by_chr_umi[chr_name].sort(key=lambda x: x.ref_pos)
+
+    fetch_count_umi = 0
+    total_edit_sites_umi = len(called_edit_sites)
+    processed_count_umi = 0
+
     with AlignmentFile(filt_bam, "rb") as bam:
-        for edit_site in called_edit_sites:
+        for chr_name, chr_edit_sites in edit_sites_by_chr_umi.items():
+            # Batch nearby edit sites (within 2*edit_dist of each other)
+            batch_threshold = 2 * edit_dist
+            i = 0
 
-            edit_chr = edit_site.chrom
-            edit_pos = edit_site.ref_pos
-            edit_window_start = max([edit_pos - edit_dist, 0])  # Accounting for edge of chromosome.
-            edit_window_end = edit_pos + edit_dist  # pysam is OK with trying to fetch greater than chromosome length.
+            while i < len(chr_edit_sites):
+                # Start a new batch
+                batch_start_idx = i
+                batch_end_idx = i
+                batch_region_start = chr_edit_sites[i].ref_pos
+                batch_region_end = chr_edit_sites[i].ref_pos
 
-            # This is most likely the culprit of the really long runtime
-            for read in bam.fetch(edit_chr, edit_window_start, edit_window_end):
+                # Extend batch while edit sites are nearby
+                while (batch_end_idx + 1 < len(chr_edit_sites) and
+                       chr_edit_sites[batch_end_idx + 1].ref_pos <= batch_region_end + batch_threshold):
+                    batch_end_idx += 1
+                    batch_region_end = chr_edit_sites[batch_end_idx].ref_pos
 
-                ### Only need to filter if is a edited cell.
-                cell_barcode = read.get_tag('CB')
-                
-                # Using filt bam means I shouldnt have to check against allt7
-                # I should also try prefilt using barcode whitelist
-                if (cell_barcode not in cell_barcodes):
-                    continue
+                # Fetch reads for the entire batch region
+                batch_window_start = max(batch_region_start - edit_dist, 0)
+                batch_window_end = batch_region_end + edit_dist
 
-                read_edit_dist = read.pos - edit_site.ref_pos
-                
-                # I SHOULD FIX THIS TO NOT BE NESTED AND TO ALSO USE DEFAULT DICT TO AVOID INIT CHECK
-                if abs(read_edit_dist) <= edit_dist:
-                    after_t7_edits_to_bc_to_umis[edit_site][cell_barcode].add(read.get_tag('pN'))
+                # Single fetch for all edit sites in this batch
+                fetch_count_umi += 1
+                batch_reads = list(bam.fetch(chr_name, batch_window_start, batch_window_end))
+
+                # Process each edit site in the batch
+                for edit_site in chr_edit_sites[batch_start_idx:batch_end_idx + 1]:
+                    edit_pos = edit_site.ref_pos
+
+                    # Process reads from the batch that are relevant to this edit site
+                    for read in batch_reads:
+                        # Filter by cell barcode
+                        cell_barcode = read.get_tag('CB')
+                        if cell_barcode not in cell_barcodes:
+                            continue
+
+                        # Check if read is within distance of this specific edit site
+                        read_edit_dist = read.pos - edit_pos
+                        if abs(read_edit_dist) <= edit_dist:
+                            after_t7_edits_to_bc_to_umis[edit_site][cell_barcode].add(read.get_tag('pN'))
+
+                    processed_count_umi += 1
+
+                # Move to next batch
+                i = batch_end_idx + 1
+
+    if verbosity >= 1:
+        print(f"Completed edit site UMI counting: {fetch_count_umi} BAM fetches for {total_edit_sites_umi} edit sites "
+              f"(reduction: {total_edit_sites_umi - fetch_count_umi} fetches saved, "
+              f"{100 * (1 - fetch_count_umi / max(total_edit_sites_umi, 1)):.1f}% reduction)",
+              file=sys.stdout, flush=True)
 
     # Now doing the read counting for this.
     after_t7_edits_umi_counts = np.zeros((len(cell_barcodes_list), len(called_edit_sites)), dtype=np.uint16)

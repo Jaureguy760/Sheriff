@@ -7,6 +7,7 @@
 pub mod kmer;
 pub mod umi;
 pub mod bam;
+pub mod gene;
 
 #[cfg(feature = "python")]
 pub mod python;
@@ -15,6 +16,7 @@ pub mod python;
 pub use kmer::*;
 pub use umi::*;
 pub use bam::*;
+pub use gene::*;
 
 /// Get library version
 pub fn version() -> &'static str {
