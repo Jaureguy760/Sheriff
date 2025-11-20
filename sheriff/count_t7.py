@@ -1323,9 +1323,9 @@ def run_count_t7(bam_file,
             if hasattr(sheriff_rs, "gene_counts_py"):
                 gene_ids = list(id_to_gene.keys())
                 gene_cols = [id_to_gene[g] for g in gene_ids]
-                counts_matrix = sheriff_rs.gene_counts_py(filt_bam, list(cell_barcodes_dict.keys()), gene_ids)
+                counts_matrix = sheriff_rs.gene_counts_py(str(filt_bam), list(cell_barcodes_dict.keys()), gene_ids)
                 cell_by_gene_umi_counts = pd.DataFrame(
-                    counts_matrix, columns=gene_cols, index=list(cell_barcodes_dict.keys())
+                    np.array(counts_matrix).T, columns=gene_cols, index=list(cell_barcodes_dict.keys())
                 )
         except Exception as e:
             print(f"[warn] Rust gene counting failed, falling back to Python: {e}", file=sys.stdout, flush=True)
@@ -1355,9 +1355,9 @@ def run_count_t7(bam_file,
                 if hasattr(sheriff_rs, "gene_counts_py"):
                     gene_ids = list(id_to_gene.keys())
                     gene_cols = [id_to_gene[g] for g in gene_ids]
-                    counts_matrix = sheriff_rs.gene_counts_py(bam_file, list(cell_barcodes_dict.keys()), gene_ids)
+                    counts_matrix = sheriff_rs.gene_counts_py(str(bam_file), list(cell_barcodes_dict.keys()), gene_ids)
                     fallback_uncorrected = pd.DataFrame(
-                        counts_matrix, columns=gene_cols, index=list(cell_barcodes_dict.keys())
+                        np.array(counts_matrix).T, columns=gene_cols, index=list(cell_barcodes_dict.keys())
                     )
             except Exception as e:
                 print(f"[warn] Rust gene counting (uncorrected) failed, falling back to Python: {e}", file=sys.stdout, flush=True)
