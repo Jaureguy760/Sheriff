@@ -218,6 +218,20 @@ def _match_kmer_python(bc_kmer_matcher, indel_seq, output_kmer_hash):
 
     return kmer_matches
 
+# Utility to limit contigs to those with reads
+def _get_mapped_contigs(bam_path):
+    """Return contigs with mapped reads (falls back to header contigs)."""
+    try:
+        with AlignmentFile(bam_path, "rb") as bam:
+            try:
+                stats = bam.get_index_statistics()
+                contigs = [stat.contig for stat in stats if stat.mapped > 0]
+            except (ValueError, OSError):
+                contigs = [contig["SN"] for contig in bam.header.get("SQ", [])]
+    except FileNotFoundError:
+        contigs = []
+    return contigs
+
 # Updated process forward and reverse
 def match_barcode_forward(read, fasta, bc_kmer_matcher, output_kmer_hash=False):
 
@@ -1291,18 +1305,23 @@ def run_count_t7(bam_file,
     print("Performing mRNA counting, removing the confounding t7 reads.. Most time consuming step.",
               file=sys.stdout, flush=True) if verbosity >= 1 else None
 
+    contigs_with_reads = _get_mapped_contigs(filt_bam)
+
     # Run using prefiltered non-t7 bam
     cell_by_gene_umi_counts = bam_count_gene_umis(filt_bam, cell_barcodes_dict, gene_names, id_to_gene,
                                                     n_cpus=n_cpus, verbose=(verbosity >= 1), chunk_size_mb=chunk_size_mb,
+                                                    contig_whitelist=contigs_with_reads,
                                  )
 
     if uncorrected_gene_count and len(allt7_reads)>0: # only makes sense if there was actual edit sites.
         print("Performing mRNA counting, INCLUDING the confounding t7 roudns on user request "
               "(via 'uncorrect_gene_count' input).",
               file=sys.stdout, flush=True) if verbosity>= 1 else None
+        contigs_all_reads = _get_mapped_contigs(bam_file)
         cell_by_gene_umi_counts_t7_confounded = bam_count_gene_umis(bam_file, cell_barcodes_dict, gene_names, id_to_gene,
                                                                     n_cpus=n_cpus, verbose=(verbosity >= 1),
-                                                                    chunk_size_mb=chunk_size_mb
+                                                                    chunk_size_mb=chunk_size_mb,
+                                                                    contig_whitelist=contigs_all_reads,
                                                                     )
 
     elif uncorrected_gene_count:

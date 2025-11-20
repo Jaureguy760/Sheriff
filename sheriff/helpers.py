@@ -271,51 +271,66 @@ def within_single_mismatch(seq1, seq2):
             diff_score+=1
     return True
 
-def bam_count_gene_umis(bam_file, cell_barcodes_dict, gene_names, id_to_genes, n_cpus=1, verbose=True,
-                        chunk_size_mb=15, # Measured in mb
-                        ):
+def bam_count_gene_umis(
+    bam_file,
+    cell_barcodes_dict,
+    gene_names,
+    id_to_genes,
+    n_cpus=1,
+    verbose=True,
+    chunk_size_mb=15,  # Measured in mb
+    contig_whitelist=None,
+):
     """ Count all the gene UMIs across the bam file!
     """
+    # Determine which contigs to process (optional whitelist)
+    bam_ = AlignmentFile(bam_file, "rb")
+    chrom_names = [contig['SN'] for contig in bam_.header['SQ']]
+    chrom_sizes = np.array([contig['LN'] for contig in bam_.header['SQ']])
+    bam_.close()
+
+    if contig_whitelist is not None:
+        allowed = set(contig_whitelist)
+        filtered = [(n, s) for n, s in zip(chrom_names, chrom_sizes) if n in allowed]
+        chrom_names, chrom_sizes = zip(*filtered) if filtered else ([], [])
+
+    # Build genome chunks
+    chunk_size = chunk_size_mb * (10**6)
+    genome_chunks = []
+    for chr_, size_ in zip(chrom_names, chrom_sizes):
+        if size_ < chunk_size:
+            genome_chunks.append([chr_])
+        else:
+            start_ = 0
+            end_ = 0
+            for end_ in range(chunk_size, size_, chunk_size):
+                genome_chunks.append((chr_, start_, end_))
+                start_ = end_
+            if end_ < size_:  # Truncated end of the contig
+                genome_chunks.append((chr_, end_, size_))
+
+    if len(genome_chunks) == 0:
+        return pd.DataFrame(
+            np.zeros((len(cell_barcodes_dict), len(gene_names)), dtype=np.uint32),
+            index=list(cell_barcodes_dict.keys()),
+            columns=list(gene_names),
+        )
+
+    # If single CPU, run sequentially over chunks
     if n_cpus == 1:
-        cell_by_gene_umi_counts_SPARSE = bam_count_gene_umis_contig(bam_file, cell_barcodes_dict,
-                                                                    gene_names, id_to_genes, verbose,None)
-        # Convert from sparse format to dense for output.
-        cell_by_gene_umi_counts = pd.DataFrame(cell_by_gene_umi_counts_SPARSE.toarray(),
-                                               index=list(cell_barcodes_dict.keys()),
-                                               columns=list(gene_names))
-
-        return cell_by_gene_umi_counts
-
-    else: #### Parallel processing
-        # Determining the contig names so can parallelize across contigs.
-        bam_ = AlignmentFile(bam_file, "rb")
-        chrom_names = [contig['SN'] for contig in bam_.header['SQ']]
-        chrom_sizes = np.array([contig['LN'] for contig in bam_.header['SQ']])
-        bam_.close()
-
-        # Let's set the chunk size to be 15Mbp, which is about 1/16th of chromosome 1.
-        chunk_size = chunk_size_mb * (10**6)
-
-        # Using this to determine a set of loci to be counted independently in parallel:
-        genome_chunks = []
-        for chr_, size_ in zip(chrom_names, chrom_sizes):
-            if size_ < chunk_size:
-                genome_chunks.append( [chr_] )
-            else:
-                start_ = 0
-                for end_ in range(chunk_size, size_, chunk_size):
-                    genome_chunks.append( (chr_, start_, end_) )
-                    start_ = end_ # re-set the start point!
-
-                if end_ < size_: # Truncated end of the contig
-                    genome_chunks.append((chr_, end_, size_))
-
-        #### Processing in parallel
+        contig_counts = [
+            bam_count_gene_umis_contig(
+                bam_file, cell_barcodes_dict, gene_names, id_to_genes, verbose, chunk
+            )
+            for chunk in genome_chunks
+        ]
+    else:
         from concurrent.futures import ProcessPoolExecutor, as_completed
-
         from functools import partial
-        partial_func = partial(bam_count_gene_umis_contig, bam_file, cell_barcodes_dict,
-                               gene_names, id_to_genes, verbose)
+
+        partial_func = partial(
+            bam_count_gene_umis_contig, bam_file, cell_barcodes_dict, gene_names, id_to_genes, verbose
+        )
 
         with ProcessPoolExecutor(max_workers=n_cpus) as executor:
             futures = {executor.submit(partial_func, chunk): chunk for chunk in genome_chunks}
@@ -323,31 +338,24 @@ def bam_count_gene_umis(bam_file, cell_barcodes_dict, gene_names, id_to_genes, n
             for future in as_completed(futures):
                 try:
                     result = future.result()  # will re-raise exceptions from worker
-                    contig_counts.append( result )
+                    contig_counts.append(result)
                 except Exception as e:
                     chunk = futures[future]
                     raise Exception(f"Error in genome chunk {chunk}: {e}")
 
-        # OLD version, had problem of SILENTLY erroring out, leaving certain chromosomes without counts!
-        # with ProcessPoolExecutor(max_workers=n_cpus) as executor:
-        #     contig_counts = list(executor.map(partial_func, genome_chunks))
+    # Combine sparse counts
+    cell_by_gene_umi_counts = contig_counts[0]
+    for counts_ in contig_counts[1:]:
+        cell_by_gene_umi_counts += counts_
 
-        # DENSE version
-        # cell_by_gene_umi_counts = contig_counts[0].values
-        # for counts_ in contig_counts[1:]:
-        #     cell_by_gene_umi_counts += counts_.values
+    # Now we have just one array, make it dense, and return as a dataframe.
+    cell_by_gene_umi_counts = pd.DataFrame(
+        cell_by_gene_umi_counts.toarray(),
+        index=list(cell_barcodes_dict.keys()),
+        columns=list(gene_names),
+    )
 
-        # SPARSE version, add these together FIRST, more memory efficient.
-        cell_by_gene_umi_counts = contig_counts[0] # sparse csr array.
-        for counts_ in contig_counts[1:]:
-            cell_by_gene_umi_counts += counts_
-
-        # Now we have just one array, make it dense, and return as a dataframe.
-        cell_by_gene_umi_counts = pd.DataFrame(cell_by_gene_umi_counts.toarray(),
-                                               index=list(cell_barcodes_dict.keys()),
-                                               columns=list(gene_names))
-
-        return cell_by_gene_umi_counts
+    return cell_by_gene_umi_counts
 
 def bam_count_gene_umis_contig(bam_file, cell_barcodes_dict, gene_names, id_to_genes, verbose, contig,
                         ):
