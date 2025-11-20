@@ -52,7 +52,14 @@ pub struct BamProcessor {
 impl BamProcessor {
     /// Create a new BAM processor from a file path
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let reader = Reader::from_path(path)?;
+        let mut reader = Reader::from_path(path)?;
+
+        // Enable multi-threaded BGZF decompression for better performance
+        // Use all available CPU cores for parallel decompression
+        let n_threads = num_cpus::get();
+        reader.set_threads(n_threads)
+            .map_err(|e| BamError::ParseError(format!("Failed to set threads: {:?}", e)))?;
+
         Ok(BamProcessor { reader })
     }
 
