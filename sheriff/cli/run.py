@@ -94,6 +94,7 @@ def run(
         Optional[str], typer.Option("--log-level", help="Log level (DEBUG, INFO, WARNING, ERROR)")
     ] = "INFO",
     profile: Annotated[Optional[bool], typer.Option("--profile", help="Enable profiling mode")] = False,
+    no_rust: Annotated[Optional[bool], typer.Option("--no-rust", help="Disable Rust acceleration for benchmarking")] = False,
 ):
     """Run the Sheriff CRISPR edit calling pipeline.
 
@@ -306,6 +307,7 @@ def run(
             checkpoint_manager=checkpoint_manager,
             results_collector=results,
             enable_instrumentation=True,
+            use_rust=not no_rust,
         )
 
         # Record end time (results already displayed by run_count_t7)
