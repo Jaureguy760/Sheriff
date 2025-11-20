@@ -134,7 +134,7 @@ def reformat_chr_name(read):
     """
     return read.reference_name.replace('hg38_', '')
 
-def match_kmer(bc_kmer_matcher, indel_seq, output_kmer_hash):
+def match_kmer(bc_kmer_matcher, indel_seq, output_kmer_hash, use_rust=True):
     """Gets kmer matches
 
     Uses Rust implementation if available (50-100x faster), falls back to Python.
@@ -151,7 +151,7 @@ def match_kmer(bc_kmer_matcher, indel_seq, output_kmer_hash):
     match_kmers = bc_kmer_matcher.match_hash
 
     # Use Rust implementation if available (50-100x speedup)
-    if HAS_RUST_KMER:
+    if HAS_RUST_KMER and rust_enabled() and use_rust:
         return _match_kmer_rust(indel_seq, k, match_kmers, output_kmer_hash)
     else:
         return _match_kmer_python(bc_kmer_matcher, indel_seq, output_kmer_hash)
@@ -231,6 +231,12 @@ def _get_mapped_contigs(bam_path):
     except FileNotFoundError:
         contigs = []
     return contigs
+
+# Global toggle for Rust usage (env + per-call)
+def rust_enabled():
+    """Return True if Rust should be used and module is available."""
+    disable_env = os.getenv("SHERIFF_DISABLE_RUST", "").lower()
+    return disable_env not in {"1", "true", "yes"}
 
 # Updated process forward and reverse
 def match_barcode_forward(read, fasta, bc_kmer_matcher, output_kmer_hash=False):
@@ -595,6 +601,7 @@ def run_count_t7(bam_file,
                  checkpoint_manager=None,  # CheckpointManager instance for resume capability
                  results_collector=None,  # PipelineResults instance for metrics collection
                  enable_instrumentation=True,  # Master switch to disable all Priority 3 features
+                 use_rust=True,  # Master switch to disable Rust acceleration for benchmarking
                  ):
 
     # === Priority 3: Initialize Instrumentation ===
