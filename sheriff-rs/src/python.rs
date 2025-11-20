@@ -3,6 +3,7 @@ use pyo3::types::PyDict;
 use crate::bam_filter::{filter_bam_by_barcodes, filter_bam_by_barcodes_parallel, filter_bam_by_barcodes_chromosome_parallel, load_whitelist};
 use crate::umi::{deduplicate_umis_rust, cell_umi_counts_rust, cell_umi_counts_rust_parallel};
 use crate::edit_clustering::{Edit, get_longest_edits};
+use crate::gene_counts::gene_counts_per_cell;
 use std::collections::HashSet;
 
 /// Filter BAM file by cell barcode whitelist (Python wrapper - file-based)
@@ -377,6 +378,26 @@ fn get_longest_edits_rust(
         .collect()
 }
 
+/// Gene counts per cell using Rust (Python wrapper)
+///
+/// Arguments:
+/// * `bam_path` - Path to BAM file
+/// * `barcodes` - List of cell barcodes
+/// * `gene_ids` - List of gene IDs (GX tag) in desired column order
+///
+/// Returns:
+/// List of lists (genes x cells) of u32 counts
+#[pyfunction]
+fn gene_counts_py(
+    bam_path: String,
+    barcodes: Vec<String>,
+    gene_ids: Vec<String>,
+) -> PyResult<Vec<Vec<u32>>> {
+    let counts = gene_counts_per_cell(&bam_path, &barcodes, &gene_ids)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+    Ok(counts)
+}
+
 /// Sheriff-rs Python module
 #[pymodule]
 fn sheriff_rs(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -390,5 +411,6 @@ fn sheriff_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(cell_umi_counts_py, m)?)?;
     m.add_function(wrap_pyfunction!(cell_umi_counts_py_parallel, m)?)?;
     m.add_function(wrap_pyfunction!(get_longest_edits_rust, m)?)?;
+    m.add_function(wrap_pyfunction!(gene_counts_py, m)?)?;
     Ok(())
 }

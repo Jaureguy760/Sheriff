@@ -596,13 +596,13 @@ def run_count_t7(bam_file,
                                             # 'polyT' is to only count polyT reads, indicating mature mRNA transcripts.
                  outdir=None, verbosity=1, n_cpus=1,
                  chunk_size_mb=15, #Mb to process at a time, in parallel.
-                 # Priority 3: Optional instrumentation (all default=None for backward compatibility)
-                 progress_tracker=None,  # PipelineProgress instance for real-time progress bars
-                 checkpoint_manager=None,  # CheckpointManager instance for resume capability
-                 results_collector=None,  # PipelineResults instance for metrics collection
-                 enable_instrumentation=True,  # Master switch to disable all Priority 3 features
-                 use_rust=True,  # Master switch to disable Rust acceleration for benchmarking
-                 ):
+                # Priority 3: Optional instrumentation (all default=None for backward compatibility)
+                progress_tracker=None,  # PipelineProgress instance for real-time progress bars
+                checkpoint_manager=None,  # CheckpointManager instance for resume capability
+                results_collector=None,  # PipelineResults instance for metrics collection
+                enable_instrumentation=True,  # Master switch to disable all Priority 3 features
+                use_rust=True,  # Master switch to disable Rust acceleration for benchmarking
+                ):
 
     # === Priority 3: Initialize Instrumentation ===
     # Boolean flags for feature detection (zero overhead when disabled)
@@ -1315,21 +1315,67 @@ def run_count_t7(bam_file,
     contigs_with_reads = _get_mapped_contigs(filt_bam)
 
     # Run using prefiltered non-t7 bam
-    cell_by_gene_umi_counts = bam_count_gene_umis(filt_bam, cell_barcodes_dict, gene_names, id_to_gene,
-                                                    n_cpus=n_cpus, verbose=(verbosity >= 1), chunk_size_mb=chunk_size_mb,
-                                                    contig_whitelist=contigs_with_reads,
-                                 )
+    cell_by_gene_umi_counts = None
+    # Try Rust gene counting if available and requested
+    if use_rust and rust_enabled():
+        try:
+            import sheriff_rs
+            if hasattr(sheriff_rs, "gene_counts_py"):
+                gene_ids = list(id_to_gene.keys())
+                gene_cols = [id_to_gene[g] for g in gene_ids]
+                counts_matrix = sheriff_rs.gene_counts_py(filt_bam, list(cell_barcodes_dict.keys()), gene_ids)
+                cell_by_gene_umi_counts = pd.DataFrame(
+                    counts_matrix, columns=gene_cols, index=list(cell_barcodes_dict.keys())
+                )
+        except Exception as e:
+            print(f"[warn] Rust gene counting failed, falling back to Python: {e}", file=sys.stdout, flush=True)
+            cell_by_gene_umi_counts = None
+
+    if cell_by_gene_umi_counts is None:
+        cell_by_gene_umi_counts = bam_count_gene_umis(
+            filt_bam,
+            cell_barcodes_dict,
+            gene_names,
+            id_to_gene,
+            n_cpus=n_cpus,
+            verbose=(verbosity >= 1),
+            chunk_size_mb=chunk_size_mb,
+            contig_whitelist=contigs_with_reads,
+        )
 
     if uncorrected_gene_count and len(allt7_reads)>0: # only makes sense if there was actual edit sites.
         print("Performing mRNA counting, INCLUDING the confounding t7 roudns on user request "
               "(via 'uncorrect_gene_count' input).",
               file=sys.stdout, flush=True) if verbosity>= 1 else None
         contigs_all_reads = _get_mapped_contigs(bam_file)
-        cell_by_gene_umi_counts_t7_confounded = bam_count_gene_umis(bam_file, cell_barcodes_dict, gene_names, id_to_gene,
-                                                                    n_cpus=n_cpus, verbose=(verbosity >= 1),
-                                                                    chunk_size_mb=chunk_size_mb,
-                                                                    contig_whitelist=contigs_all_reads,
-                                                                    )
+        fallback_uncorrected = None
+        if use_rust and rust_enabled():
+            try:
+                import sheriff_rs
+                if hasattr(sheriff_rs, "gene_counts_py"):
+                    gene_ids = list(id_to_gene.keys())
+                    gene_cols = [id_to_gene[g] for g in gene_ids]
+                    counts_matrix = sheriff_rs.gene_counts_py(bam_file, list(cell_barcodes_dict.keys()), gene_ids)
+                    fallback_uncorrected = pd.DataFrame(
+                        counts_matrix, columns=gene_cols, index=list(cell_barcodes_dict.keys())
+                    )
+            except Exception as e:
+                print(f"[warn] Rust gene counting (uncorrected) failed, falling back to Python: {e}", file=sys.stdout, flush=True)
+                fallback_uncorrected = None
+
+        if fallback_uncorrected is None:
+            cell_by_gene_umi_counts_t7_confounded = bam_count_gene_umis(
+                bam_file,
+                cell_barcodes_dict,
+                gene_names,
+                id_to_gene,
+                n_cpus=n_cpus,
+                verbose=(verbosity >= 1),
+                chunk_size_mb=chunk_size_mb,
+                contig_whitelist=contigs_all_reads,
+            )
+        else:
+            cell_by_gene_umi_counts_t7_confounded = fallback_uncorrected
 
     elif uncorrected_gene_count:
         cell_by_gene_umi_counts_t7_confounded = cell_by_gene_umi_counts
