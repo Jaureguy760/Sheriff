@@ -335,7 +335,7 @@ def get_barcoded_edits(bam_file, cell_barcodes,
                        ref_fasta_file,
                        k, t7_barcode,
                        output_kmer_hash=False, blacklist_seqs=None,
-                       print_freq=1000000, verbosity=1):
+                       print_freq=1000000, verbosity=1, use_rust=True):
 
     # This dictionary keeps track of faiss indices PER chromosome, for fast neighbourhood lookup.
     # This is used downstream to group edits by 'canonical' edit!
@@ -382,8 +382,8 @@ def get_barcoded_edits(bam_file, cell_barcodes,
             blacklist_matcher_forward[ seq_ ] = KmerMatcher(k, seq_)
             blacklist_matcher_rev[ seq_ ] = KmerMatcher(k, KmerMatcher.revcomp(seq_))
 
-            kmer_matches_forward = match_kmer(bc_kmer_matcher_forward, seq_, False)
-            kmer_matches_rev = match_kmer(bc_kmer_matcher_reverse, KmerMatcher.revcomp(seq_), False)
+            kmer_matches_forward = match_kmer(bc_kmer_matcher_forward, seq_, False, use_rust=use_rust)
+            kmer_matches_rev = match_kmer(bc_kmer_matcher_reverse, KmerMatcher.revcomp(seq_), False, use_rust=use_rust)
             for kmer in kmer_matches_forward:
                 blacklist_seq_kmers_forward[kmer] = seq_
             for kmer in kmer_matches_rev:
