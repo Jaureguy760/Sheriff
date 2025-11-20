@@ -26,7 +26,6 @@
 
 use rustc_hash::FxHashMap;
 use rayon::prelude::*;
-use std::collections::HashMap;
 
 /// Union-Find data structure with path compression and union-by-rank
 ///
