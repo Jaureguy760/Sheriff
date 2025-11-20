@@ -79,3 +79,7 @@ sheriff-rs/Cargo.lock
 # Benchmark outputs (large binary files)
 benchmarks/output/*.bam
 benchmarks/output/*.bam.bai
+
+# Test data archives (keep README only)
+test_data/*
+!test_data/README.md
