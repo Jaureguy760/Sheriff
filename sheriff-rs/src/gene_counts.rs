@@ -2,13 +2,23 @@ use std::collections::HashMap;
 use ahash::AHashSet;
 use rust_htslib::bam::{self, Read};
 
-/// Compute gene UMI counts per cell using BAM tags (CB for barcode, GX for gene id, pN for UMI).
+/// Compute gene UMI counts per cell using BAM tags (CB for barcode, GX/GN/gn for gene id, pN/UB for UMI).
 ///
 /// Returns a matrix[G][C] of u32 counts in gene_ids order and barcodes order.
+///
+/// # Arguments
+/// * `bam_path` - Path to BAM file
+/// * `barcodes` - List of cell barcodes to include
+/// * `gene_ids` - List of gene IDs to include
+/// * `max_reads` - Maximum number of reads to process (0 = unlimited)
+///
+/// # Returns
+/// Result containing Vec<Vec<u32>> where result[gene_idx][cell_idx] = UMI count
 pub fn gene_counts_per_cell(
     bam_path: &str,
     barcodes: &[String],
     gene_ids: &[String],
+    max_reads: usize,
 ) -> Result<Vec<Vec<u32>>, Box<dyn std::error::Error>> {
     let mut barcode_to_idx = HashMap::with_capacity(barcodes.len());
     for (i, bc) in barcodes.iter().enumerate() {
@@ -28,7 +38,12 @@ pub fn gene_counts_per_cell(
 
     let mut reader = bam::Reader::from_path(bam_path)?;
 
-    for result in reader.records() {
+    for (read_idx, result) in reader.records().enumerate() {
+        // Check max_reads limit (0 means unlimited)
+        if max_reads > 0 && read_idx >= max_reads {
+            break;
+        }
+
         let record = result?;
 
         // Cell barcode
@@ -42,10 +57,15 @@ pub fn gene_counts_per_cell(
             None => continue,
         };
 
-        // Gene id
-        let gx = match record.aux(b"GX") {
-            Ok(bam::record::Aux::String(s)) => s.to_string(),
-            _ => continue,
+        // Gene id - try multiple tag names (GX, GN, gn) to match Python behavior
+        let gx = if let Ok(bam::record::Aux::String(s)) = record.aux(b"GX") {
+            s.to_string()
+        } else if let Ok(bam::record::Aux::String(s)) = record.aux(b"GN") {
+            s.to_string()
+        } else if let Ok(bam::record::Aux::String(s)) = record.aux(b"gn") {
+            s.to_string()
+        } else {
+            continue;
         };
 
         let gene_idx = match gene_to_idx.get(gx.as_str()) {
@@ -53,10 +73,13 @@ pub fn gene_counts_per_cell(
             None => continue,
         };
 
-        // UMI tag
-        let umi = match record.aux(b"pN") {
-            Ok(bam::record::Aux::String(s)) => s.to_string(),
-            _ => continue,
+        // UMI tag - try multiple tag names (pN, UB) to match Python behavior
+        let umi = if let Ok(bam::record::Aux::String(s)) = record.aux(b"pN") {
+            s.to_string()
+        } else if let Ok(bam::record::Aux::String(s)) = record.aux(b"UB") {
+            s.to_string()
+        } else {
+            continue;
         };
 
         umi_sets[gene_idx][cell_idx].insert(umi);

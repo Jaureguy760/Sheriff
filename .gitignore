@@ -57,6 +57,15 @@ example_data/*.gtf
 example_data/*.gtf.gz
 example_data/*.gtf.gz.tbi
 example_data/*.order
+benchmarks/large_superb_cell_whitelist.txt
+benchmarks/large_superb_t7barcodes.fa
+benchmarks/large_superb_whitelist.txt
+benchmarks/results_perf_suite.json
+benchmarks/run_perf_suite*.log
+benchmarks/stage*_baseline.json
+benchmarks/stage4_all_rust.json
+benchmarks/stage_comparison.json
+benchmarks/validation_output.txt
 
 # Whitelist specific test files
 !example_data/barcode_headAligned_anno.sorted.edit_regions_200kb.bam
