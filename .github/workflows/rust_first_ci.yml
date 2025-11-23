@@ -1,0 +1,53 @@
+name: rust-first-ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - rust-first
+
+jobs:
+  build-test-bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install maturin
+
+      - name: Cargo tests
+        run: |
+          cargo test --manifest-path sheriff-rs/Cargo.toml
+
+      - name: Build Rust wheel
+        run: |
+          maturin build --release --features python --manifest-path sheriff-rs/Cargo.toml
+
+      - name: Install Sheriff (wheel + deps)
+        run: |
+          python -m pip install target/wheels/sheriff_rs-*.whl
+          python -m pip install -e .
+          python -m pip install -r benchmarks/requirements.txt
+
+      - name: Perf parity smoke (small example)
+        run: |
+          python benchmarks/run_perf_suite.py \
+            --max-reads 50000 \
+            --max-cells 10 \
+            --max-genes 50 \
+            --log benchmarks/run_perf_suite_ci.log
+
+      - name: Plot pipeline smoke
+        run: |
+          python benchmarks/plot_perf.py

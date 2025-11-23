@@ -66,9 +66,17 @@ python benchmarks/compare_rust_python.py
 
 # Run comprehensive benchmarks
 python benchmarks/benchmark_sheriff.py
+
+# Run the perf suite + plots (Python vs Rust)
+make perf-suite
+make plots
 ```
 
 **Expected speedup with Rust**: 3-10x overall, 10-50x for BAM filtering
+
+For more detail, see:
+- 📊 [BENCHMARKS.md](BENCHMARKS.md) – quick commands and outputs
+- 📈 [benchmarks/PERF_SUITE.md](benchmarks/PERF_SUITE.md) – perf suite instructions and plot notes
 
 Install
 -------

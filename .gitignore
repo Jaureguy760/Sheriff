@@ -79,7 +79,29 @@ sheriff-rs/Cargo.lock
 # Benchmark outputs (large binary files)
 benchmarks/output/*.bam
 benchmarks/output/*.bam.bai
+benchmark_data/
+benchmark_results/
 
-# Test data archives (keep README only)
-test_data/*
-!test_data/README.md
+# Local large benchmark inputs / outputs
+benchmarks/large_superb.bam
+benchmarks/large_superb.bam.bai
+benchmarks/results_perf_suite*.png
+benchmarks/results_perf_suite*.pdf
+
+# Test data large files (upload to GitHub releases instead)
+test_data/*.bam
+test_data/*.bam.bai
+test_data/*.fa
+test_data/*.fa.fai
+test_data/*.fa.gz
+test_data/*.gtf
+test_data/*.gtf.gz
+test_data_*.tar.gz
+
+# Keep test_data config/script files (small)
+!test_data/*.txt
+!test_data/*.py
+!test_data/*.sh
+!test_data/*.json
+!test_data/*.md
+!test_data/*.bed
