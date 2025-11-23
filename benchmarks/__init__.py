@@ -1,1 +1,1 @@
-# Benchmarks package marker for relative imports.
+# Namespace package for benchmarking utilities.

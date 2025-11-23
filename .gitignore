@@ -66,6 +66,8 @@ benchmarks/stage*_baseline.json
 benchmarks/stage4_all_rust.json
 benchmarks/stage_comparison.json
 benchmarks/validation_output.txt
+benchmarks/gene_py.json
+benchmarks/gene_rust.json
 
 # Whitelist specific test files
 !example_data/barcode_headAligned_anno.sorted.edit_regions_200kb.bam
