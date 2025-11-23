@@ -3,6 +3,7 @@ use pyo3::types::PyDict;
 use crate::bam_filter::{filter_bam_by_barcodes, filter_bam_by_barcodes_parallel, filter_bam_by_barcodes_chromosome_parallel, load_whitelist};
 use crate::umi::{deduplicate_umis_rust, cell_umi_counts_rust, cell_umi_counts_rust_parallel};
 use crate::edit_clustering::{Edit, get_longest_edits};
+use crate::gene_counts::gene_counts_per_cell;
 use std::collections::HashSet;
 
 /// Filter BAM file by cell barcode whitelist (Python wrapper - file-based)
@@ -377,6 +378,39 @@ fn get_longest_edits_rust(
         .collect()
 }
 
+/// Gene counts per cell using Rust (Python wrapper)
+///
+/// Computes a gene x cell UMI count matrix from a BAM file.
+/// Matches Python's `python_gene_counts` behavior exactly.
+///
+/// # Arguments
+/// * `bam_path` - Path to BAM file
+/// * `barcodes` - List of cell barcodes
+/// * `gene_ids` - List of gene IDs (GX/GN/gn tag) in desired column order
+/// * `max_reads` - Maximum reads to process (0 = unlimited, default)
+///
+/// # Returns
+/// List of lists (genes x cells) of u32 counts
+///
+/// # Example (Python)
+/// ```python
+/// from sheriff_rs import gene_counts_py
+/// counts = gene_counts_py("data.bam", ["AAACCCAAG", "AAACCCAAT"], ["GENE1", "GENE2"], 100000)
+/// # Returns: [[5, 3], [2, 8]]  # 2 genes x 2 cells
+/// ```
+#[pyfunction]
+#[pyo3(signature = (bam_path, barcodes, gene_ids, max_reads=0))]
+fn gene_counts_py(
+    bam_path: String,
+    barcodes: Vec<String>,
+    gene_ids: Vec<String>,
+    max_reads: usize,
+) -> PyResult<Vec<Vec<u32>>> {
+    let counts = gene_counts_per_cell(&bam_path, &barcodes, &gene_ids, max_reads)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+    Ok(counts)
+}
+
 /// Sheriff-rs Python module
 #[pymodule]
 fn sheriff_rs(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -390,5 +424,6 @@ fn sheriff_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(cell_umi_counts_py, m)?)?;
     m.add_function(wrap_pyfunction!(cell_umi_counts_py_parallel, m)?)?;
     m.add_function(wrap_pyfunction!(get_longest_edits_rust, m)?)?;
+    m.add_function(wrap_pyfunction!(gene_counts_py, m)?)?;
     Ok(())
 }
