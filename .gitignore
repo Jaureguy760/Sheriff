@@ -82,6 +82,12 @@ benchmarks/output/*.bam.bai
 benchmark_data/
 benchmark_results/
 
+# Local large benchmark inputs / outputs
+benchmarks/large_superb.bam
+benchmarks/large_superb.bam.bai
+benchmarks/results_perf_suite*.png
+benchmarks/results_perf_suite*.pdf
+
 # Test data large files (upload to GitHub releases instead)
 test_data/*.bam
 test_data/*.bam.bai
