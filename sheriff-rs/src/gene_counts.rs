@@ -1,91 +1,105 @@
 use std::collections::HashMap;
-use ahash::AHashSet;
-use rust_htslib::bam::{self, Read};
 
-/// Compute gene UMI counts per cell using BAM tags (CB for barcode, GX/GN/gn for gene id, pN/UB for UMI).
+use ahash::AHashSet;
+use rust_htslib::bam::{self, record::Aux, Read};
+use smallvec::SmallVec;
+
+/// Compute unique gene UMI counts per cell from a barcoded BAM file (Rust).
 ///
-/// Returns a matrix[G][C] of u32 counts in gene_ids order and barcodes order.
+/// Reads these tags per record:
+/// - **CB**: cell barcode
+/// - **GX/GN/gn**: gene identifier (multiple tag names are supported)
+/// - **pN/UB**: UMI sequence (pipeline-dependent UMI tag)
 ///
-/// # Arguments
-/// * `bam_path` - Path to BAM file
-/// * `barcodes` - List of cell barcodes to include
-/// * `gene_ids` - List of gene IDs to include
-/// * `max_reads` - Maximum number of reads to process (0 = unlimited)
+/// For each read that has all required tags and whose barcode/gene appear in
+/// the provided lists, the UMI is inserted into a per-(gene, cell) set so each
+/// UMI is counted once. Returns a dense matrix `[genes][cells]` of `u32`
+/// counts in the order of `gene_ids` (rows) and `barcodes` (cols).
 ///
-/// # Returns
-/// Result containing Vec<Vec<u32>> where result[gene_idx][cell_idx] = UMI count
+/// Implementation notes:
+/// - Uses byte-keyed hash maps for barcodes/genes to avoid per-record `String`
+///   allocations on tag parsing.
+/// - Uses `SmallVec<[u8; 24]>` inside an `AHashSet` for UMI storage to reduce
+///   heap churn for short UMIs.
+/// - Honors `max_reads` as an optional early-exit cap (0 = no limit).
+///
+/// Errors if the BAM cannot be opened/read; records missing expected tags are
+/// skipped without failing the run.
 pub fn gene_counts_per_cell(
     bam_path: &str,
     barcodes: &[String],
     gene_ids: &[String],
     max_reads: usize,
 ) -> Result<Vec<Vec<u32>>, Box<dyn std::error::Error>> {
-    let mut barcode_to_idx = HashMap::with_capacity(barcodes.len());
+    // Map barcodes/genes to indices using byte keys to avoid per-record String allocs.
+    let mut barcode_to_idx: HashMap<Vec<u8>, usize> = HashMap::with_capacity(barcodes.len());
     for (i, bc) in barcodes.iter().enumerate() {
-        barcode_to_idx.insert(bc.as_str(), i);
+        barcode_to_idx.insert(bc.as_bytes().to_vec(), i);
     }
 
-    let mut gene_to_idx = HashMap::with_capacity(gene_ids.len());
+    let mut gene_to_idx: HashMap<Vec<u8>, usize> = HashMap::with_capacity(gene_ids.len());
     for (i, g) in gene_ids.iter().enumerate() {
-        gene_to_idx.insert(g.as_str(), i);
+        gene_to_idx.insert(g.as_bytes().to_vec(), i);
     }
 
     let n_genes = gene_ids.len();
     let n_cells = barcodes.len();
 
-    // umi_sets[gene][cell] = unique UMIs
-    let mut umi_sets: Vec<Vec<AHashSet<String>>> = vec![vec![AHashSet::new(); n_cells]; n_genes];
+    // umi_sets[gene][cell] = unique UMI byte buffers
+    type UmiBuf = SmallVec<[u8; 24]>;
+    let mut umi_sets: Vec<Vec<AHashSet<UmiBuf>>> = vec![vec![AHashSet::new(); n_cells]; n_genes];
 
     let mut reader = bam::Reader::from_path(bam_path)?;
 
     for (read_idx, result) in reader.records().enumerate() {
-        // Check max_reads limit (0 means unlimited)
         if max_reads > 0 && read_idx >= max_reads {
             break;
         }
 
         let record = result?;
 
-        // Cell barcode
+        // Cell barcode as bytes
         let cb = match record.aux(b"CB") {
-            Ok(bam::record::Aux::String(s)) => s.to_string(),
+            Ok(Aux::String(s)) => s.as_bytes(),
             _ => continue,
         };
 
-        let cell_idx = match barcode_to_idx.get(cb.as_str()) {
+        let cell_idx = match barcode_to_idx.get(cb) {
             Some(i) => *i,
             None => continue,
         };
 
-        // Gene id - try multiple tag names (GX, GN, gn) to match Python behavior
-        let gx = if let Ok(bam::record::Aux::String(s)) = record.aux(b"GX") {
-            s.to_string()
-        } else if let Ok(bam::record::Aux::String(s)) = record.aux(b"GN") {
-            s.to_string()
-        } else if let Ok(bam::record::Aux::String(s)) = record.aux(b"gn") {
-            s.to_string()
+        // Gene id - try multiple tag names (GX, GN, gn)
+        let gx_bytes = if let Ok(Aux::String(s)) = record.aux(b"GX") {
+            s.as_bytes()
+        } else if let Ok(Aux::String(s)) = record.aux(b"GN") {
+            s.as_bytes()
+        } else if let Ok(Aux::String(s)) = record.aux(b"gn") {
+            s.as_bytes()
         } else {
             continue;
         };
 
-        let gene_idx = match gene_to_idx.get(gx.as_str()) {
+        let gene_idx = match gene_to_idx.get(gx_bytes) {
             Some(i) => *i,
             None => continue,
         };
 
-        // UMI tag - try multiple tag names (pN, UB) to match Python behavior
-        let umi = if let Ok(bam::record::Aux::String(s)) = record.aux(b"pN") {
-            s.to_string()
-        } else if let Ok(bam::record::Aux::String(s)) = record.aux(b"UB") {
-            s.to_string()
+        // UMI tag - try multiple tag names (pN, UB)
+        let umi_bytes = if let Ok(Aux::String(s)) = record.aux(b"pN") {
+            s.as_bytes()
+        } else if let Ok(Aux::String(s)) = record.aux(b"UB") {
+            s.as_bytes()
         } else {
             continue;
         };
 
-        umi_sets[gene_idx][cell_idx].insert(umi);
+        // Copy UMI bytes into a smallvec to avoid heap churn for short UMIs.
+        let mut buf: UmiBuf = SmallVec::new();
+        buf.extend_from_slice(umi_bytes);
+        umi_sets[gene_idx][cell_idx].insert(buf);
     }
 
-    // Convert to counts
     let counts: Vec<Vec<u32>> = umi_sets
         .into_iter()
         .map(|cells| cells.into_iter().map(|umis| umis.len() as u32).collect())
