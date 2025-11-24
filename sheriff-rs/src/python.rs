@@ -121,10 +121,10 @@ fn match_kmer_rust(
     whitelist: Option<Vec<usize>>,
     output_hash: bool,
 ) -> PyResult<Vec<PyObject>> {
-    use rustc_hash::FxHashSet;
+    use std::collections::HashSet;
 
     // Convert whitelist to FxHashSet (PHASE 1 OPTIMIZATION: 2-3x faster than std::HashSet)
-    let whitelist_set = whitelist.map(|v| v.into_iter().collect::<FxHashSet<usize>>());
+    let whitelist_set = whitelist.map(|v| v.into_iter().collect::<HashSet<usize>>());
 
     // Call Rust implementation
     let matches = crate::kmer::match_kmer(

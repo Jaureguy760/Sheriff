@@ -292,25 +292,25 @@ mod tests {
     #[test]
     fn test_deduplicate_umis_single() {
         let umis = vec!["ATCGATCG".to_string()];
-        assert_eq!(deduplicate_umis_rust(umis), 1);
+        assert_eq!(deduplicate_umis_rust(&umis), 1);
     }
 
     #[test]
     fn test_deduplicate_umis_two_identical() {
         let umis = vec!["ATCGATCG".to_string(), "ATCGATCG".to_string()];
-        assert_eq!(deduplicate_umis_rust(umis), 1);
+        assert_eq!(deduplicate_umis_rust(&umis), 1);
     }
 
     #[test]
     fn test_deduplicate_umis_two_similar() {
         let umis = vec!["ATCGATCG".to_string(), "TTCGATCG".to_string()];
-        assert_eq!(deduplicate_umis_rust(umis), 1); // Within 1 mismatch
+        assert_eq!(deduplicate_umis_rust(&umis), 1); // Within 1 mismatch
     }
 
     #[test]
     fn test_deduplicate_umis_two_different() {
         let umis = vec!["ATCGATCG".to_string(), "GGGGGGGG".to_string()];
-        assert_eq!(deduplicate_umis_rust(umis), 2);
+        assert_eq!(deduplicate_umis_rust(&umis), 2);
     }
 
     #[test]
@@ -323,7 +323,7 @@ mod tests {
             "AAAB".to_string(), // B (1 diff from A)
             "AABB".to_string(), // C (1 diff from B, 2 from A)
         ];
-        assert_eq!(deduplicate_umis_rust(umis), 1); // All connected via chain
+        assert_eq!(deduplicate_umis_rust(&umis), 1); // All connected via chain
     }
 
     #[test]
@@ -334,7 +334,7 @@ mod tests {
             "TTTT".to_string(),
             "TTTG".to_string(), // Group 2: TTTT-TTTG
         ];
-        assert_eq!(deduplicate_umis_rust(umis), 2);
+        assert_eq!(deduplicate_umis_rust(&umis), 2);
     }
 
     #[test]
@@ -345,7 +345,7 @@ mod tests {
             "CCCC".to_string(),
             "GGGG".to_string(),
         ];
-        assert_eq!(deduplicate_umis_rust(umis), 4);
+        assert_eq!(deduplicate_umis_rust(&umis), 4);
     }
 
     #[test]
@@ -360,7 +360,7 @@ mod tests {
             "GGGGGGGG".to_string(), // PCR duplicate
             "CCCCCCCC".to_string(), // Original molecule 3
         ];
-        assert_eq!(deduplicate_umis_rust(umis), 3); // 3 unique molecules
+        assert_eq!(deduplicate_umis_rust(&umis), 3); // 3 unique molecules
     }
 
     #[test]
@@ -452,14 +452,14 @@ mod tests {
             umis.push("ATCGATCG".to_string());
         }
 
-        // Group 2: 5 UMIs with 1 mismatch from each other (chain)
+        // Group 2: chain of UMIs within 1 mismatch, all same length
         umis.push("AAAAAAAA".to_string());
-        umis.push("AAAAAAAAC".to_string());
+        umis.push("AAAAAAAC".to_string());
 
         // Group 3: Isolated UMI
         umis.push("TTTTTTTT".to_string());
 
-        let result = deduplicate_umis_rust(umis);
+        let result = deduplicate_umis_rust(&umis);
         assert_eq!(result, 3); // 3 connected components
     }
 

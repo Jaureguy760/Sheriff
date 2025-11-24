@@ -17,6 +17,7 @@ pyo3 = { version = "0.20", features = ["extension-module"], optional = true }
 petgraph = "0.6"            # Graph algorithms for UMI deduplication
 bio = "1.6"                 # Sequence alignment (rust-bio)
 regex = "1.10"              # Pattern matching for homopolymer correction
+smallvec = "1.11"           # Stack-allocated UMI buffers
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

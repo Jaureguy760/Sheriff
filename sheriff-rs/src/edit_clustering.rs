@@ -299,6 +299,11 @@ pub fn get_longest_edits(mut edits: Vec<Edit>) -> Vec<Edit> {
         return vec![];
     }
 
+    // If only one edit, return it directly.
+    if edits.len() == 1 {
+        return edits;
+    }
+
     // Sort by alt_seq length (ascending)
     edits.sort_by_key(|e| e.alt_seq.len());
 
