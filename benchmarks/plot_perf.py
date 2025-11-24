@@ -19,12 +19,24 @@ from typing import Dict, List, Optional
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Visual style tuned for manuscripts/presentations
-sns.set_theme(style="whitegrid", font="DejaVu Serif", context="talk")
+def set_theme():
+    sns.set_theme(
+        style="whitegrid",
+        context="talk",
+        font="DejaVu Serif",
+        rc={
+            "axes.titlesize": 22,
+            "axes.labelsize": 16,
+            "xtick.labelsize": 13,
+            "ytick.labelsize": 13,
+            "legend.fontsize": 14,
+            "figure.dpi": 120,
+        },
+    )
 
-PY_COLOR = "#a6bddb"   # muted blue
-RS_COLOR = "#045a8d"   # deep blue
-SP_COLOR = "#41ab5d"   # green for speedup
+PY_COLOR = "#99badd"   # muted blue
+RS_COLOR = "#1f4e79"   # deep blue
+SP_COLOR = "#2c974b"   # green for speedup
 
 OPS = [
     ("filter", "Filter"),
@@ -81,19 +93,29 @@ def make_labels(entries: List[Dict]) -> List[str]:
     return labels
 
 
-def bar_pair(ax, labels, py_vals, rs_vals, title, ylabel):
+def bar_pair(ax, labels, py_vals, rs_vals, title, ylabel, rotate=20, zoom=None):
+    # Optional zoom: rescale small values for readability (e.g., UMI/gene)
+    if zoom:
+        factor = zoom
+        py_plot = [v * factor for v in py_vals]
+        rs_plot = [v * factor for v in rs_vals]
+        ylabel = f"{ylabel} (×{zoom:g})"
+    else:
+        py_plot = py_vals
+        rs_plot = rs_vals
+
     x = range(len(labels))
-    ax.bar([i - 0.22 for i in x], py_vals, width=0.44, label="Python", color=PY_COLOR, edgecolor="#34495e")
-    ax.bar([i + 0.22 for i in x], rs_vals, width=0.44, label="Rust", color=RS_COLOR, edgecolor="#1b2833")
+    ax.bar([i - 0.22 for i in x], py_plot, width=0.44, label="Python", color=PY_COLOR, edgecolor="#203040")
+    ax.bar([i + 0.22 for i in x], rs_plot, width=0.44, label="Rust", color=RS_COLOR, edgecolor="#0d1826")
     ax.set_xticks(list(x))
-    ax.set_xticklabels(labels, rotation=20, ha="right")
+    ax.set_xticklabels(labels, rotation=rotate, ha="right")
     ax.set_title(title, pad=8)
     ax.set_ylabel(ylabel)
     ax.legend(frameon=False, loc="upper right")
-    # Annotate bars
+    # Annotate bars (display original values if zoomed)
     for i, (p, r) in enumerate(zip(py_vals, rs_vals)):
-        ax.text(i - 0.22, p, fmt(p), ha="center", va="bottom", fontsize=9, rotation=90)
-        ax.text(i + 0.22, r, fmt(r), ha="center", va="bottom", fontsize=9, rotation=90)
+        ax.text(i - 0.22, py_plot[i], fmt(p), ha="center", va="bottom", fontsize=9, rotation=90)
+        ax.text(i + 0.22, rs_plot[i], fmt(r), ha="center", va="bottom", fontsize=9, rotation=90)
 
 
 def make_wall(entries: List[Dict], out_pdf: Path, out_png: Path):
@@ -102,8 +124,13 @@ def make_wall(entries: List[Dict], out_pdf: Path, out_png: Path):
     rs_vals = [e["rust_wall"] for e in entries if e["python_wall"] is not None and e["rust_wall"] is not None]
     labels = [lbl for e, lbl in zip(entries, labels) if e["python_wall"] is not None and e["rust_wall"] is not None]
 
+    # Apply a modest zoom for small bars if the range is extreme
+    zoom = None
+    if py_vals and max(py_vals) > 50 * min(v for v in py_vals if v > 0):
+        zoom = 10.0
+
     fig, ax = plt.subplots(figsize=(8.5, 4.5))
-    bar_pair(ax, labels, py_vals, rs_vals, "Wall time", "Seconds")
+    bar_pair(ax, labels, py_vals, rs_vals, "Wall time", "Seconds", zoom=zoom)
     fig.tight_layout()
     fig.savefig(out_pdf)
     fig.savefig(out_png, dpi=300)
@@ -135,7 +162,7 @@ def make_speed(entries: List[Dict], out_pdf: Path, out_png: Path):
     ax.set_xticks(range(len(labels)))
     ax.set_xticklabels(labels, rotation=25, ha="right")
     ax.set_title("Speedup (Rust / Python)", pad=8)
-    ax.set_ylabel("Fold")
+    ax.set_ylabel("Fold (log scale)")
     ax.set_yscale("log")
     # Annotate speedups
     for i, v in enumerate(vals):
@@ -157,7 +184,11 @@ def make_panels(entries: List[Dict], out_pdf: Path, out_png: Path):
     # Wall
     if wall_mask:
         wl = make_labels(wall_mask)
-        bar_pair(axes[0], wl, [e["python_wall"] for e in wall_mask], [e["rust_wall"] for e in wall_mask], "Wall time", "Seconds")
+        zoom = None
+        py_vals = [e["python_wall"] for e in wall_mask]
+        if py_vals and max(py_vals) > 50 * min(v for v in py_vals if v > 0):
+            zoom = 10.0
+        bar_pair(axes[0], wl, py_vals, [e["rust_wall"] for e in wall_mask], "Wall time", "Seconds", zoom=zoom)
     else:
         axes[0].set_visible(False)
 
