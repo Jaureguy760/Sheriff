@@ -1,0 +1,9 @@
+{
+  "enabledPlugins": [
+    "velocity-workflow",
+    "@anthropic/nextjs-vercel-pro",
+    "@anthropic/testing-suite",
+    "@anthropic/performance-optimizer"
+  ],
+  "env": {}
+}
